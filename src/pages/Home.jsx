@@ -1,9 +1,10 @@
 import React from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
-import { Shield, Zap, Lock, Send, Mail, ArrowRight } from 'lucide-react'
+import { Shield, Zap, Lock, ArrowRight } from 'lucide-react'
 
 const Home = () => {
-  const { session } = useOutletContext()
+  const context = useOutletContext()
+  const user = context?.user
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -27,19 +28,28 @@ const Home = () => {
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md z-10">
-          <Link 
-            to={session ? "/subdomain" : "/auth"}
-            className="group flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] text-center flex items-center justify-center gap-2"
-          >
-            {session ? 'Buka Dashboard' : 'Mulai Sekarang'} <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-          </Link>
-          {!session && (
+          {user ? (
             <Link 
-              to="/auth" 
-              className="flex-1 py-3.5 px-6 bg-[#1a1d24] hover:bg-[#252932] text-slate-200 border border-blue-900/50 rounded-xl font-bold transition-all text-center hover:border-blue-500"
+              to="/subdomain"
+              className="group flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] text-center flex items-center justify-center gap-2"
             >
-              Masuk Akun
+              Buka Dashboard <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </Link>
+          ) : (
+            <>
+               <Link 
+                to="/auth" 
+                className="group flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)] hover:shadow-[0_0_30px_rgba(37,99,235,0.5)] text-center flex items-center justify-center gap-2"
+              >
+                Mulai Sekarang <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <Link 
+                to="/auth" 
+                className="flex-1 py-3.5 px-6 bg-[#1a1d24] hover:bg-[#252932] text-slate-200 border border-blue-900/50 rounded-xl font-bold transition-all text-center hover:border-blue-500"
+              >
+                Masuk Akun
+              </Link>
+            </>
           )}
         </div>
 
