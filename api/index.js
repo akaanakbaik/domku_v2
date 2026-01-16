@@ -16,7 +16,7 @@ const supabase = createClient(
 )
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -26,7 +26,6 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-// --- HTML EMAIL TEMPLATE (V4 - Perfected) ---
 const sendEmail = async (to, subject, title, message, buttonText, buttonLink) => {
   const htmlContent = `
     <!DOCTYPE html>
@@ -37,7 +36,7 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f8fafc; margin: 0; padding: 0; }
         .container { max-width: 500px; margin: 40px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border: 1px solid #e2e8f0; }
         .header { background: #0f172a; padding: 30px; text-align: center; }
-        .logo { width: 150px; height: auto; object-fit: contain; }
+        .logo { width: 120px; height: auto; object-fit: contain; }
         .body { padding: 40px 30px; color: #334155; line-height: 1.6; }
         .title { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
         .btn { display: inline-block; background-color: #2563eb; color: #ffffff !important; padding: 12px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; margin-top: 24px; }
@@ -53,10 +52,8 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
         <div class="body">
           <div class="title">${title}</div>
           <p>${message}</p>
-          
           ${buttonText ? `<div style="text-align:center"><a href="${buttonLink}" class="btn">${buttonText}</a></div>` : ''}
           ${!buttonText && buttonLink ? `<div class="otp">${buttonLink}</div>` : ''}
-          
           <p style="margin-top: 30px; font-size: 13px; color: #64748b;">Abaikan jika ini bukan aktivitas Anda.</p>
         </div>
         <div class="footer">&copy; 2026 Domku Manager.<br>Padang, Indonesia 🇮🇩</div>
@@ -71,7 +68,6 @@ const NAME_REGEX = /^[a-zA-Z0-9#!_-]+$/
 
 app.get('/api', (req, res) => res.status(200).json({ status: 'Online' }))
 
-// --- REGISTER ---
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password, origin } = req.body
@@ -96,7 +92,6 @@ app.post('/api/auth/register', async (req, res) => {
   }
 })
 
-// --- VERIFY EMAIL ---
 app.post('/api/auth/verify-email', async (req, res) => {
   try {
     const { token } = req.body
@@ -129,7 +124,6 @@ app.post('/api/auth/verify-email', async (req, res) => {
   }
 })
 
-// --- LOGIN CHECK ---
 app.post('/api/auth/login-check', async (req, res) => {
   try {
     const { email, password } = req.body
@@ -149,29 +143,25 @@ app.post('/api/auth/login-check', async (req, res) => {
   }
 })
 
-// --- VERIFY OTP (UPDATE PENTING) ---
 app.post('/api/auth/verify-otp', async (req, res) => {
   try {
     const { email, code } = req.body
     
-    // 1. Cek OTP
     const { data: otpData } = await supabase.from('verification_codes').select('*').eq('email', email).eq('code', code).single()
     if (!otpData) return res.status(400).json({ success: false, error: "Kode OTP Salah." })
     
-    // 2. Ambil Data User Lengkap (Untuk Session)
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
     
-    // 3. Hapus OTP
     await supabase.from('verification_codes').delete().eq('email', email)
     
-    // 4. Kirim Data User ke Frontend
     res.json({ 
       success: true, 
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        api_key: user.api_key
+        api_key: user.api_key,
+        avatar_url: user.avatar_url
       }
     })
   } catch (error) {
@@ -179,10 +169,77 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 })
 
-// --- SUBDOMAIN ---
+app.put('/api/user/profile', async (req, res) => {
+  try {
+    const { id, name, avatar_url } = req.body
+    if (!id || !name) return res.status(400).json({ success: false, error: "Data tidak lengkap" })
+
+    await supabase.from('users').update({ name, avatar_url }).eq('id', id)
+    const { data: user } = await supabase.from('users').select('*').eq('id', id).single()
+
+    res.json({ success: true, user })
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+app.post('/api/user/change-password', async (req, res) => {
+  try {
+    const { id, oldPassword, newPassword } = req.body
+    if (newPassword.length < 6) return res.status(400).json({ success: false, error: "Password baru minimal 6 karakter" })
+
+    const { data: user } = await supabase.from('users').select('*').eq('id', id).single()
+    const isValid = await bcrypt.compare(oldPassword, user.password_hash)
+    if (!isValid) return res.status(400).json({ success: false, error: "Password lama salah" })
+
+    const salt = await bcrypt.genSalt(10)
+    const passwordHash = await bcrypt.hash(newPassword, salt)
+
+    await supabase.from('users').update({ password_hash: passwordHash }).eq('id', id)
+    res.json({ success: true, message: "Password berhasil diubah" })
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body
+    const { data: user } = await supabase.from('users').select('email').eq('email', email).single()
+    if (!user) return res.status(400).json({ success: false, error: "Email tidak ditemukan" })
+
+    const code = Math.floor(1000 + Math.random() * 9000).toString()
+    await supabase.from('verification_codes').upsert({ email, code }, { onConflict: 'email' })
+    await sendEmail(email, 'Reset Password', 'Permintaan Reset Password', 'Gunakan kode di bawah ini untuk mereset password Anda.', null, code)
+
+    res.json({ success: true, message: "OTP Reset dikirim" })
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body
+    const { data: otp } = await supabase.from('verification_codes').select('*').eq('email', email).eq('code', code).single()
+    if (!otp) return res.status(400).json({ success: false, error: "OTP Salah" })
+
+    const salt = await bcrypt.genSalt(10)
+    const passwordHash = await bcrypt.hash(newPassword, salt)
+
+    await supabase.from('users').update({ password_hash: passwordHash }).eq('email', email)
+    await supabase.from('verification_codes').delete().eq('email', email)
+
+    res.json({ success: true, message: "Password berhasil direset" })
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
 app.post('/api/subdomain', async (req, res) => {
   const apiKey = req.headers['x-api-key']
   if (!apiKey) return res.status(401).json({ success: false, error: "API Key Required" })
+  
   const { data: user } = await supabase.from('users').select('id').eq('api_key', apiKey).single()
   if (!user) return res.status(403).json({ success: false, error: "Invalid API Key" })
 
