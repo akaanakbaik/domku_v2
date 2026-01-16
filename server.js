@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-import crypto from 'crypto';
 
 dotenv.config();
 
@@ -23,19 +22,6 @@ const supabase = createClient(
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'dist')));
-
-const generateApiKey = () => {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-  const numbers = '0123456789';
-  const symbols = '!@#$%^&*';
-  
-  let result = '';
-  for (let i = 0; i < 4; i++) result += letters.charAt(Math.floor(Math.random() * letters.length));
-  for (let i = 0; i < 3; i++) result += numbers.charAt(Math.floor(Math.random() * numbers.length));
-  for (let i = 0; i < 2; i++) result += symbols.charAt(Math.floor(Math.random() * symbols.length));
-  
-  return result.split('').sort(() => 0.5 - Math.random()).join('');
-};
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -184,6 +170,10 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+export default app;
