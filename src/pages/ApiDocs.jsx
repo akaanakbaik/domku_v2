@@ -20,7 +20,7 @@ const ApiDocs = () => {
     setTimeout(() => setCopied(''), 2000)
   }
 
-  const apiKey = session?.user?.user_metadata?.api_key || 'AbCd123!@'
+  const apiKey = session?.user?.user_metadata?.api_key || 'LOGIN_UNTUK_LIHAT_KEY'
 
   const curlExample = `curl -X POST "${host}/api/subdomain" \\
   -H "Content-Type: application/json" \\
@@ -121,28 +121,6 @@ const ApiDocs = () => {
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="bg-[#111318] border border-blue-900/20 rounded-2xl p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Batasan & Peraturan</h2>
-          <ul className="space-y-3 text-slate-400 text-sm">
-            <li className="flex items-start gap-3">
-              <span className="bg-blue-900/40 p-1 rounded text-blue-400 mt-0.5">•</span>
-              Setiap user dibatasi membuat maksimal <strong>30 subdomain</strong>.
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="bg-blue-900/40 p-1 rounded text-blue-400 mt-0.5">•</span>
-              Wajib menyertakan header <code>X-API-Key</code> yang valid.
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="bg-blue-900/40 p-1 rounded text-blue-400 mt-0.5">•</span>
-              Dilarang menggunakan subdomain untuk kegiatan ilegal, phishing, atau konten berbahaya.
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="bg-blue-900/40 p-1 rounded text-blue-400 mt-0.5">•</span>
-              Tipe record yang didukung: A, CNAME, AAAA, TXT.
-            </li>
-          </ul>
         </div>
       </div>
     </div>
