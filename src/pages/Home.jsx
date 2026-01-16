@@ -10,9 +10,9 @@ const Home = () => {
         <div className="relative mb-8 group">
           <div className="absolute inset-0 bg-blue-500 rounded-full blur-3xl opacity-20 group-hover:opacity-30 transition-opacity"></div>
           <img 
-            src="https://raw.githubusercontent.com/akaanakbaik/my-cdn/main/logodomku_bg.jpg" 
+            src="https://raw.githubusercontent.com/akaanakbaik/my-cdn/main/logodomku_nobg.png" 
             alt="Domku Logo" 
-            className="relative w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-[#1a1d24] shadow-2xl object-cover hover:scale-105 transition-transform duration-300"
+            className="relative w-32 md:w-48 object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-300"
           />
         </div>
         
