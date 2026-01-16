@@ -4,17 +4,20 @@ import { User, Key, Lock, Upload, Copy, Check, ShieldAlert } from 'lucide-react'
 import Loader from '../components/Loader'
 
 const Settings = () => {
-  const { user, refreshSession } = useOutletContext()
+  const context = useOutletContext()
+  const user = context?.user
+  const refreshSession = context?.refreshSession
+  
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState({ type: '', text: '' })
   
+  // State form
   const [newName, setNewName] = useState('')
   const [previewImg, setPreviewImg] = useState(null)
   const [fileToUpload, setFileToUpload] = useState(null)
   
   const [passData, setPassData] = useState({ old: '', new: '' })
-  
   const [resetStep, setResetStep] = useState(0)
   const [resetOtp, setResetOtp] = useState('')
   const [resetNewPass, setResetNewPass] = useState('')
@@ -25,10 +28,13 @@ const Settings = () => {
     if (user) {
       setNewName(user.name || '')
       setPreviewImg(user.avatar_url || null)
-    } else {
-      navigate('/auth') 
     }
-  }, [user, navigate])
+  }, [user])
+
+  // Cegah render jika user null (tunggu Layout)
+  if (!user) {
+    return <div className="text-center py-20 text-slate-500">Memuat data pengguna...</div>
+  }
 
   const showMsg = (type, text) => {
     setMsg({ type, text })
@@ -67,9 +73,10 @@ const Settings = () => {
       const data = await res.json()
       if (!data.success) throw new Error(data.error)
 
+      // Update LocalStorage & Session UI
       const newUser = { ...user, ...data.user }
       localStorage.setItem('domku_session', JSON.stringify(newUser))
-      refreshSession()
+      if (refreshSession) refreshSession()
       
       showMsg('success', 'Profil diperbarui!')
     } catch (err) {
@@ -142,14 +149,13 @@ const Settings = () => {
     }
   }
 
-  if (!user) return null 
   if (loading) return <Loader />
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       
       <div className="flex items-center gap-3 mb-6">
-        <div className="bg-blue-600/20 p-3 rounded-full text-blue-500"><Settings size={32} /></div>
+        <div className="bg-blue-600/20 p-3 rounded-full text-blue-500"><UserCog size={32} /></div>
         <h1 className="text-3xl font-bold text-white">Pengaturan Akun</h1>
       </div>
 
@@ -159,6 +165,7 @@ const Settings = () => {
         </div>
       )}
 
+      {/* 1. PROFILE & AVATAR */}
       <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6">
         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><User className="text-blue-500"/> Profil Saya</h2>
         
@@ -175,7 +182,7 @@ const Settings = () => {
                 <img src={previewImg} alt="Preview" className="w-24 h-24 rounded-full object-cover border-4 border-blue-600 shadow-xl" />
               ) : (
                 <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-3xl">
-                  {user?.name?.charAt(0).toUpperCase()}
+                  {user.name?.charAt(0).toUpperCase()}
                 </div>
               )}
               <div className="absolute bottom-0 right-0 bg-white text-blue-600 p-1.5 rounded-full shadow-lg"><Upload size={14}/></div>
@@ -192,17 +199,19 @@ const Settings = () => {
         </form>
       </div>
 
+      {/* 2. API KEY */}
       <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6">
         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Key className="text-yellow-500"/> API Key</h2>
         <div className="bg-black/40 border border-blue-900/20 p-4 rounded-xl flex items-center justify-between gap-4 group">
-          <code className="text-blue-300 font-mono text-sm break-all">{user?.api_key}</code>
-          <button onClick={() => { navigator.clipboard.writeText(user?.api_key); showMsg('success', 'Tersalin!') }} className="p-2 bg-white/5 group-hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors">
+          <code className="text-blue-300 font-mono text-sm break-all">{user.api_key}</code>
+          <button onClick={() => { navigator.clipboard.writeText(user.api_key); showMsg('success', 'Tersalin!') }} className="p-2 bg-white/5 group-hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors">
             <Copy size={20} />
           </button>
         </div>
-        <p className="text-xs text-slate-500 mt-2">API Key ini bersifat rahasia. Jangan berikan kepada siapapun.</p>
+        <p className="text-xs text-slate-500 mt-2">API Key ini bersifat rahasia.</p>
       </div>
 
+      {/* 3. CHANGE PASSWORD */}
       <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6">
         <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Lock className="text-green-500"/> Keamanan Akun</h2>
         <form onSubmit={changePassword} className="space-y-4">
