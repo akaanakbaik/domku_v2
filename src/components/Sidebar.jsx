@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Home, Globe, Code, LogOut, Settings, Copy, Check } from 'lucide-react'
+import { X, Home, Globe, Code, LogOut, Settings, Copy, Check, UserCog } from 'lucide-react'
 
 const Sidebar = ({ isOpen, onClose, user }) => {
   const navigate = useNavigate()
@@ -78,6 +78,12 @@ const Sidebar = ({ isOpen, onClose, user }) => {
           <NavItem icon={Home} label="Home" path="/" />
           <NavItem icon={Globe} label="Subdomain" path="/subdomain" />
           <NavItem icon={Code} label="Dokumentasi API" path="/api" />
+          {user && (
+            <>
+              <div className="h-px bg-blue-900/20 my-2"></div>
+              <NavItem icon={UserCog} label="Pengaturan Akun" path="/settings" />
+            </>
+          )}
         </div>
 
         <div className="p-4 border-t border-blue-900/20">
@@ -103,7 +109,7 @@ const Sidebar = ({ isOpen, onClose, user }) => {
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-[#1a1d24] w-full max-w-sm p-6 rounded-2xl border border-red-500/20 shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-2">Konfirmasi Keluar</h3>
-            <p className="text-slate-400 mb-6 text-sm">Sesi Anda akan dihapus dari perangkat ini. Anda harus login ulang dengan OTP nanti.</p>
+            <p className="text-slate-400 mb-6 text-sm">Sesi Anda akan dihapus dari perangkat ini.</p>
             <div className="flex gap-3">
               <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 py-3 text-slate-300 hover:text-white bg-white/5 rounded-xl hover:bg-white/10 transition-colors font-medium">Batal</button>
               <button onClick={handleLogout} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors">Ya, Keluar</button>
