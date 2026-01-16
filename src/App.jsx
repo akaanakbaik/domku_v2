@@ -1,26 +1,14 @@
-import React, { useEffect, useState } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import React from 'react'
+import { Routes, Route } from 'react-router-dom'
 import Home from './pages/Home'
 import Auth from './pages/Auth'
 import VerifyEmail from './pages/VerifyEmail'
 import Dashboard from './pages/Dashboard'
-import Settings from './pages/Settings' // Import ini
+import Settings from './pages/Settings'
 import ApiDocs from './pages/ApiDocs'
 import Layout from './components/Layout'
-import Loader from './components/Loader'
 
 function App() {
-  const [loading, setLoading] = useState(false)
-  const location = useLocation()
-
-  useEffect(() => {
-    setLoading(true)
-    const timer = setTimeout(() => setLoading(false), 1000)
-    return () => clearTimeout(timer)
-  }, [location.pathname])
-
-  if (loading) return <Loader />
-
   return (
     <Routes>
       <Route element={<Layout />}>
@@ -28,7 +16,7 @@ function App() {
         <Route path="/auth" element={<Auth />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/subdomain" element={<Dashboard />} />
-        <Route path="/settings" element={<Settings />} /> {/* Route Baru */}
+        <Route path="/settings" element={<Settings />} />
         <Route path="/api" element={<ApiDocs />} />
       </Route>
     </Routes>
