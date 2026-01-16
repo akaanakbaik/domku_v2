@@ -1,48 +1,60 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Mail, Lock, Key, ArrowRight } from 'lucide-react'
+import { Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react'
 import Loader from '../components/Loader'
 
 const Auth = () => {
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState(1) 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [otp, setOtp] = useState('')
-  const [error, setError] = useState('')
   const [isLoginMode, setIsLoginMode] = useState(true)
+  const [loading, setLoading] = useState(false)
+  
+  // State Login Step (1: Email/Pass, 2: OTP)
+  const [loginStep, setLoginStep] = useState(1)
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    otp: ''
+  })
+  
+  const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
 
-  const generateRandomApiKey = () => {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-    const numbers = '0123456789'
-    const symbols = '!@#$%^&*'
-    
-    let result = ''
-    for (let i = 0; i < 4; i++) result += letters.charAt(Math.floor(Math.random() * letters.length))
-    for (let i = 0; i < 3; i++) result += numbers.charAt(Math.floor(Math.random() * numbers.length))
-    for (let i = 0; i < 2; i++) result += symbols.charAt(Math.floor(Math.random() * symbols.length))
-    
-    return result.split('').sort(() => 0.5 - Math.random()).join('')
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  const handleSendCode = async (e) => {
+  // --- LOGIC REGISTER ---
+  const handleRegister = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setSuccessMsg('')
 
     try {
-      const res = await fetch('/api/auth/send-code', {
+      // Validasi Nama di Frontend juga
+      const nameRegex = /^[a-zA-Z0-9#!_-]+$/
+      if (!nameRegex.test(formData.name)) throw new Error("Nama hanya boleh huruf, angka, dan simbol # - ! _")
+
+      const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          origin: window.location.origin
+        })
       })
       const data = await res.json()
       
-      if (!data.success) throw new Error(data.error || 'Gagal mengirim kode')
+      if (!data.success) throw new Error(data.error)
       
-      setStep(2)
+      setSuccessMsg("Link konfirmasi telah dikirim ke Email Anda. Silakan cek inbox/spam.")
+      setFormData({ ...formData, name: '', email: '', password: '' })
+      
     } catch (err) {
       setError(err.message)
     } finally {
@@ -50,52 +62,61 @@ const Auth = () => {
     }
   }
 
-  const handleVerifyAndAuth = async (e) => {
+  // --- LOGIC LOGIN (Step 1: Cek Password) ---
+  const handleLoginStep1 = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     try {
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('verification_codes')
-        .select('*')
-        .eq('email', email)
-        .eq('code', otp)
-        .single()
+      // Coba login ke Supabase untuk cek password benar/salah
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password
+      })
 
-      if (verifyError || !verifyData) throw new Error('Kode verifikasi salah atau kadaluarsa')
+      if (error) throw new Error("Email atau Password salah.")
 
-      await supabase.from('verification_codes').delete().eq('email', email)
+      // Jika password benar, JANGAN redirect dulu. Minta OTP.
+      // Kirim OTP via API
+      const res = await fetch('/api/auth/login-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email })
+      })
+      const otpData = await res.json()
+      if (!otpData.success) throw new Error(otpData.error)
 
-      if (isLoginMode) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        })
-        if (signInError) throw signInError
-      } else {
-        const apiKey = generateRandomApiKey()
-        
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { api_key: apiKey }
-          }
-        })
-        if (signUpError) throw signUpError
+      setLoginStep(2) // Pindah ke layar OTP
+      
+    } catch (err) {
+      setError(err.message)
+      // Logout paksa jika gagal di tengah jalan
+      await supabase.auth.signOut()
+    } finally {
+      setLoading(false)
+    }
+  }
 
-        if (signUpData.user) {
-          const { error: dbError } = await supabase.from('users').insert({
-            id: signUpData.user.id,
-            email: email,
-            api_key: apiKey
-          })
-          if (dbError) console.error('DB Insert Error:', dbError) 
-        }
-      }
+  // --- LOGIC LOGIN (Step 2: Verify OTP) ---
+  const handleLoginStep2 = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
 
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, code: formData.otp })
+      })
+      const data = await res.json()
+
+      if (!data.success) throw new Error(data.error)
+
+      // Jika OTP benar, user sudah login secara session (dari step 1), jadi tinggal redirect
       navigate('/subdomain')
+
     } catch (err) {
       setError(err.message)
     } finally {
@@ -106,15 +127,17 @@ const Auth = () => {
   if (loading) return <Loader />
 
   return (
-    <div className="flex items-center justify-center min-h-[80vh]">
-      <div className="w-full max-w-md bg-[#111318] border border-blue-900/30 p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+    <div className="flex items-center justify-center min-h-[80vh] px-4">
+      <div className="w-full max-w-md bg-[#111318] border border-blue-900/30 p-8 rounded-2xl shadow-2xl relative overflow-hidden animate-in fade-in zoom-in duration-300">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-cyan-400"></div>
-        
+
         <h2 className="text-2xl font-bold text-white mb-2 text-center">
-          {step === 1 ? (isLoginMode ? 'Masuk Akun' : 'Daftar Baru') : 'Verifikasi OTP'}
+          {isLoginMode ? (loginStep === 1 ? 'Masuk Akun' : 'Verifikasi Keamanan') : 'Daftar Baru'}
         </h2>
         <p className="text-slate-500 text-sm text-center mb-8">
-          {step === 1 ? 'Kelola subdomain Anda dengan mudah' : `Kode dikirim ke ${email}`}
+          {isLoginMode 
+            ? (loginStep === 1 ? 'Masuk untuk mengelola subdomain' : `Masukkan OTP yang dikirim ke ${formData.email}`)
+            : 'Buat akun dengan email profesional'}
         </p>
 
         {error && (
@@ -122,85 +145,145 @@ const Auth = () => {
             {error}
           </div>
         )}
+        {successMsg && (
+          <div className="mb-6 p-3 bg-green-900/20 border border-green-500/30 rounded-lg text-green-400 text-sm text-center">
+            {successMsg}
+          </div>
+        )}
 
-        {step === 1 ? (
-          <form onSubmit={handleSendCode} className="space-y-4">
+        {/* FORM REGISTER */}
+        {!isLoginMode && (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-400 ml-1">Nama Panggilan</label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 text-slate-500" size={18} />
+                <input
+                  name="name"
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={handleChange}
+                  className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="Huruf, angka, #, -, !, _"
+                />
+              </div>
+            </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-400 ml-1">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 text-slate-500" size={18} />
                 <input
+                  name="email"
                   type="email"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={formData.email}
+                  onChange={handleChange}
                   className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500 transition-colors"
-                  placeholder="nama@email.com"
+                  placeholder="email@anda.com"
                 />
               </div>
             </div>
-            
             <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-400 ml-1">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 text-slate-500" size={18} />
                 <input
+                  name="password"
                   type="password"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  value={formData.password}
+                  onChange={handleChange}
                   className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="••••••••"
                 />
               </div>
             </div>
-
             <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all mt-4">
-              Lanjutkan <ArrowRight size={18} className="inline ml-1" />
+              Daftar Sekarang <ArrowRight size={18} className="inline ml-1" />
             </button>
           </form>
-        ) : (
-          <form onSubmit={handleVerifyAndAuth} className="space-y-4">
+        )}
+
+        {/* FORM LOGIN STEP 1 */}
+        {isLoginMode && loginStep === 1 && (
+          <form onSubmit={handleLoginStep1} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-400 ml-1">Kode OTP (4 Angka)</label>
+              <label className="text-xs font-semibold text-slate-400 ml-1">Email</label>
               <div className="relative">
-                <Key className="absolute left-3 top-3 text-slate-500" size={18} />
+                <Mail className="absolute left-3 top-3 text-slate-500" size={18} />
                 <input
-                  type="text"
+                  name="email"
+                  type="email"
                   required
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="email@anda.com"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-400 ml-1">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 text-slate-500" size={18} />
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+            <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all mt-4">
+              Masuk <ArrowRight size={18} className="inline ml-1" />
+            </button>
+          </form>
+        )}
+
+        {/* FORM LOGIN STEP 2 (OTP) */}
+        {isLoginMode && loginStep === 2 && (
+          <form onSubmit={handleLoginStep2} className="space-y-4">
+             <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-400 ml-1">Kode OTP Login</label>
+              <div className="relative">
+                <ShieldCheck className="absolute left-3 top-3 text-slate-500" size={18} />
+                <input
+                  name="otp"
+                  type="text"
                   maxLength={4}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
-                  className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500 transition-colors tracking-widest text-lg text-center"
+                  required
+                  value={formData.otp}
+                  onChange={(e) => setFormData({...formData, otp: e.target.value.replace(/[^0-9]/g, '')})}
+                  className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500 transition-colors text-center tracking-[10px] font-bold text-xl"
                   placeholder="0000"
                 />
               </div>
             </div>
-
             <button type="submit" className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-all mt-4">
               Verifikasi & Masuk
-            </button>
-            <button 
-              type="button" 
-              onClick={() => setStep(1)} 
-              className="w-full py-2 text-slate-500 hover:text-white text-sm"
-            >
-              Kembali
             </button>
           </form>
         )}
 
-        {step === 1 && (
-          <div className="mt-6 text-center text-sm text-slate-500">
-            {isLoginMode ? 'Belum punya akun? ' : 'Sudah punya akun? '}
-            <button 
-              onClick={() => setIsLoginMode(!isLoginMode)} 
-              className="text-blue-400 hover:text-blue-300 font-semibold"
-            >
-              {isLoginMode ? 'Daftar' : 'Login'}
-            </button>
-          </div>
-        )}
+        {/* SWITCH MODE */}
+        <div className="mt-6 text-center text-sm text-slate-500">
+          {isLoginMode ? 'Belum punya akun? ' : 'Sudah punya akun? '}
+          <button 
+            onClick={() => {
+              setIsLoginMode(!isLoginMode)
+              setLoginStep(1)
+              setError('')
+              setSuccessMsg('')
+            }} 
+            className="text-blue-400 hover:text-blue-300 font-semibold"
+          >
+            {isLoginMode ? 'Daftar' : 'Login'}
+          </button>
+        </div>
       </div>
     </div>
   )
