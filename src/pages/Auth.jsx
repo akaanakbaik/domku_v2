@@ -1,155 +1,177 @@
-import React, { useState, useEffect } from 'react'
-import { useOutletContext, useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabaseClient'
-import { Globe, Trash2, Copy, AlertCircle, Check } from 'lucide-react'
+import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Mail, Lock, User, ArrowRight, ShieldCheck, X, Check } from 'lucide-react'
 import Loader from '../components/Loader'
 
-const Dashboard = () => {
-  const { session } = useOutletContext()
+const Auth = () => {
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
-  const [subdomains, setSubdomains] = useState([])
-  const [formData, setFormData] = useState({ name: '', type: 'A', target: '' })
-  const [msg, setMsg] = useState({ type: '', text: '' })
-  const [copyStatus, setCopyStatus] = useState(null)
+  const [isLoginMode, setIsLoginMode] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [loginStep, setLoginStep] = useState(1)
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', otp: '' })
+  
+  // Custom Toast Notification State
+  const [toast, setToast] = useState({ show: false, type: '', message: '' })
 
-  useEffect(() => {
-    // Cek Session
-    if (!session) {
-      const local = localStorage.getItem('domku_session')
-      if (!local) {
-        navigate('/auth')
-        return
-      }
-    }
+  const showToast = (type, message) => {
+    setToast({ show: true, type, message })
+    setTimeout(() => setToast({ ...toast, show: false }), 5000)
+  }
 
-    const fetchData = async () => {
-      try {
-        // Ambil User ID dari Session (Support kedua tipe session)
-        const userId = session?.user?.id || JSON.parse(localStorage.getItem('domku_session'))?.id
-        
-        const { data: subData } = await supabase
-          .from('subdomains')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value })
 
-        if (subData) setSubdomains(subData)
-      } catch (error) {
-        console.error(error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
-  }, [session, navigate])
-
-  const handleCreate = async (e) => {
-    e.preventDefault()
-    setMsg({ type: 'loading', text: 'Memproses...' })
-    
-    // Ambil API Key (Support kedua tipe session)
-    const apiKey = session?.user?.user_metadata?.api_key || session?.user?.api_key || JSON.parse(localStorage.getItem('domku_session'))?.api_key
+  // --- SAFE FETCH (UPDATED: 60 DETIK TIMEOUT) ---
+  const safeFetch = async (url, options = {}) => {
+    const controller = new AbortController()
+    // Perpanjang timeout jadi 60 detik (Serverless + SMTP butuh waktu)
+    const timeoutId = setTimeout(() => controller.abort(), 60000) 
 
     try {
-      const res = await fetch('/api/subdomain', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
-        body: JSON.stringify({ subdomain: formData.name, recordType: formData.type, target: formData.target })
-      })
-
-      const result = await res.json()
-      if (!result.success) throw new Error(result.error)
-
-      setMsg({ type: 'success', text: 'Subdomain berhasil dibuat!' })
-      setFormData({ name: '', type: 'A', target: '' })
+      const res = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(timeoutId) // Hapus timer jika selesai
       
-      // Refresh Data
-      const userId = session?.user?.id
-      const { data: updatedList } = await supabase.from('subdomains').select('*').eq('user_id', userId).order('created_at', { ascending: false })
-      if (updatedList) setSubdomains(updatedList)
+      const isJson = res.headers.get('content-type')?.includes('application/json')
+      const data = isJson ? await res.json() : null
 
-    } catch (err) {
-      setMsg({ type: 'error', text: err.message })
+      if (!res.ok) {
+        throw new Error(data?.error || `Server Error: ${res.status}`)
+      }
+      return data
+
+    } catch (e) {
+      clearTimeout(timeoutId)
+      if (e.name === 'AbortError') {
+        throw new Error("Koneksi timeout (Server sibuk). Silakan coba lagi.")
+      }
+      throw new Error(e.message || "Gagal terhubung ke server.")
     }
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('Hapus subdomain ini?')) return
-    await supabase.from('subdomains').delete().eq('id', id)
-    setSubdomains(prev => prev.filter(item => item.id !== id))
+  const handleRegister = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (loading) return
+
+    setLoading(true)
+    try {
+      const data = await safeFetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, origin: window.location.origin })
+      })
+      showToast('success', data.message)
+      setFormData({ ...formData, name: '', email: '', password: '' })
+    } catch (err) {
+      showToast('error', err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const copyToClipboard = (text, id) => {
-    navigator.clipboard.writeText(text)
-    setCopyStatus(id)
-    setTimeout(() => setCopyStatus(null), 2000)
+  const handleLoginStep1 = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (loading) return
+
+    setLoading(true)
+    try {
+      await safeFetch('/api/auth/login-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, password: formData.password })
+      })
+      setLoginStep(2)
+      showToast('success', "Kode OTP telah dikirim.")
+    } catch (err) {
+      showToast('error', err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLoginStep2 = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (loading) return
+
+    setLoading(true)
+    try {
+      const data = await safeFetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, code: formData.otp })
+      })
+      
+      // Simpan Session User ke LocalStorage
+      localStorage.setItem('domku_session', JSON.stringify(data.user))
+      
+      showToast('success', "Login Berhasil! Mengalihkan...")
+      
+      // Beri jeda sedikit agar user membaca pesan sukses
+      setTimeout(() => {
+        navigate('/subdomain')
+      }, 1000)
+
+    } catch (err) {
+      showToast('error', err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (loading) return <Loader />
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Globe className="text-blue-500" /> Buat Subdomain</h2>
+    <div className="flex items-center justify-center min-h-[80vh] px-4">
+      {/* Custom Toast UI */}
+      {toast.show && (
+        <div className={`fixed top-6 right-6 z-[100] flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl border animate-in slide-in-from-top-5 duration-300 ${toast.type === 'error' ? 'bg-[#1a1d24] border-red-500 text-red-400' : 'bg-[#1a1d24] border-green-500 text-green-400'}`}>
+          {toast.type === 'error' ? <X size={20} /> : <Check size={20} />}
+          <span className="font-semibold">{toast.message}</span>
+        </div>
+      )}
 
-        {msg.text && (
-          <div className={`mb-6 p-4 rounded-xl border flex items-center gap-3 ${msg.type === 'error' ? 'bg-red-900/20 border-red-500/30 text-red-400' : (msg.type === 'success' ? 'bg-green-900/20 border-green-500/30 text-green-400' : 'bg-blue-900/20 border-blue-500/30 text-blue-400')}`}>
-            <AlertCircle size={20} />
-            <span>{msg.text}</span>
-          </div>
+      <div className="w-full max-w-md bg-[#111318] border border-blue-900/30 p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-cyan-400"></div>
+        <h2 className="text-2xl font-bold text-white mb-2 text-center">{isLoginMode ? (loginStep === 1 ? 'Masuk' : 'Verifikasi OTP') : 'Daftar Baru'}</h2>
+        <p className="text-slate-500 text-sm text-center mb-8">{isLoginMode ? (loginStep === 1 ? 'Kelola subdomain Anda' : `Cek email ${formData.email}`) : 'Buat akun gratis'}</p>
+
+        {!isLoginMode && (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div className="space-y-1"><label className="text-xs font-semibold text-slate-400 ml-1">Nama</label><div className="relative"><User className="absolute left-3 top-3 text-slate-500" size={18} /><input name="name" type="text" required value={formData.name} onChange={handleChange} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500" placeholder="Nama Anda" /></div></div>
+            <div className="space-y-1"><label className="text-xs font-semibold text-slate-400 ml-1">Email</label><div className="relative"><Mail className="absolute left-3 top-3 text-slate-500" size={18} /><input name="email" type="email" required value={formData.email} onChange={handleChange} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500" placeholder="email@domain.com" /></div></div>
+            <div className="space-y-1"><label className="text-xs font-semibold text-slate-400 ml-1">Password</label><div className="relative"><Lock className="absolute left-3 top-3 text-slate-500" size={18} /><input name="password" type="password" required value={formData.password} onChange={handleChange} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500" placeholder="••••••••" /></div></div>
+            <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold mt-4 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? 'Memproses...' : 'Daftar Sekarang'} <ArrowRight size={18} className="inline ml-1" />
+            </button>
+          </form>
         )}
 
-        <form onSubmit={handleCreate} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-400">Subdomain</label>
-              <div className="relative">
-                <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 px-4 text-white focus:border-blue-500" placeholder="nama" />
-                <div className="absolute top-[-25px] right-0 text-xs text-blue-400 font-mono">{formData.name ? `${formData.name}.domku.my.id` : '...domku.my.id'}</div>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-400">Tipe Record</label>
-              <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 px-4 text-white focus:border-blue-500">
-                <option value="A">A (IPv4)</option>
-                <option value="CNAME">CNAME (Alias)</option>
-                <option value="AAAA">AAAA (IPv6)</option>
-                <option value="TXT">TXT (Text)</option>
-              </select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-400">Target IP / Domain</label>
-            <input type="text" required value={formData.target} onChange={(e) => setFormData({ ...formData, target: e.target.value })} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 px-4 text-white focus:border-blue-500 font-mono" placeholder="192.168.1.1" />
-          </div>
-          <button type="submit" disabled={msg.type === 'loading'} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 disabled:opacity-50">{msg.type === 'loading' ? 'Memproses...' : 'Buat Subdomain'}</button>
-        </form>
-      </div>
+        {isLoginMode && loginStep === 1 && (
+          <form onSubmit={handleLoginStep1} className="space-y-4">
+            <div className="space-y-1"><label className="text-xs font-semibold text-slate-400 ml-1">Email</label><div className="relative"><Mail className="absolute left-3 top-3 text-slate-500" size={18} /><input name="email" type="email" required value={formData.email} onChange={handleChange} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500" placeholder="email@domain.com" /></div></div>
+            <div className="space-y-1"><label className="text-xs font-semibold text-slate-400 ml-1">Password</label><div className="relative"><Lock className="absolute left-3 top-3 text-slate-500" size={18} /><input name="password" type="password" required value={formData.password} onChange={handleChange} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500" placeholder="••••••••" /></div></div>
+            <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold mt-4 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? 'Memeriksa...' : 'Masuk'} <ArrowRight size={18} className="inline ml-1" />
+            </button>
+          </form>
+        )}
 
-      <div className="grid grid-cols-1 gap-4">
-        <h3 className="text-xl font-bold text-white mb-2">Riwayat ({subdomains.length}/30)</h3>
-        {subdomains.length === 0 ? <div className="text-center py-10 text-slate-500 bg-[#111318] rounded-2xl border border-blue-900/20 border-dashed">Belum ada subdomain.</div> : 
-          subdomains.map((item) => (
-            <div key={item.id} className="bg-[#111318] border border-blue-900/20 rounded-xl p-4 flex flex-col md:flex-row justify-between items-center gap-4 hover:border-blue-500/40 transition-colors">
-              <div className="flex-1 min-w-0 text-center md:text-left">
-                <h4 className="font-bold text-white truncate">{item.name}</h4>
-                <div className="flex items-center justify-center md:justify-start gap-2 text-xs text-slate-400 mt-1">
-                  <span className="bg-blue-900/30 px-2 py-0.5 rounded text-blue-300 font-mono">{item.type}</span>
-                  <span className="truncate max-w-[150px]">{item.target}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => copyToClipboard(item.name, item.id)} className="p-2 bg-[#0b0c10] text-slate-400 hover:text-white rounded-lg border border-blue-900/20">{copyStatus === item.id ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}</button>
-                <button onClick={() => handleDelete(item.id)} className="p-2 bg-red-900/10 text-red-400 hover:bg-red-900/30 rounded-lg border border-red-900/20"><Trash2 size={18} /></button>
-              </div>
-            </div>
-          ))
-        }
+        {isLoginMode && loginStep === 2 && (
+          <form onSubmit={handleLoginStep2} className="space-y-4">
+            <div className="space-y-1"><label className="text-xs font-semibold text-slate-400 ml-1">Kode OTP</label><div className="relative"><ShieldCheck className="absolute left-3 top-3 text-slate-500" size={18} /><input name="otp" type="text" maxLength={4} required value={formData.otp} onChange={(e) => setFormData({...formData, otp: e.target.value.replace(/[^0-9]/g, '')})} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-blue-500 text-center tracking-[10px] font-bold text-xl placeholder-slate-700" placeholder="0000" autoFocus /></div></div>
+            <button type="submit" disabled={loading} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold mt-4 shadow-lg shadow-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed">
+              {loading ? 'Memverifikasi...' : 'Verifikasi'}
+            </button>
+          </form>
+        )}
+        
+        <div className="mt-6 text-center text-sm text-slate-500">
+          <button disabled={loading} onClick={() => { setIsLoginMode(!isLoginMode); setLoginStep(1) }} className="text-blue-400 hover:text-blue-300 font-semibold disabled:opacity-50">{isLoginMode ? 'Buat Akun Baru' : 'Sudah Punya Akun'}</button>
+        </div>
       </div>
     </div>
   )
 }
 
-export default Dashboard
+export default Auth
