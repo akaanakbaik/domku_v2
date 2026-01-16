@@ -5,7 +5,7 @@ import { Globe, Trash2, Copy, AlertCircle, Check, Plus, Search } from 'lucide-re
 import Loader from '../components/Loader'
 
 const Dashboard = () => {
-  const { session } = useOutletContext()
+  const { user } = useOutletContext() // Ganti session ke user
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [subdomains, setSubdomains] = useState([])
@@ -15,14 +15,14 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
-    if (!session) return 
+    if (!user) return 
 
     const fetchData = async () => {
       try {
         const { data } = await supabase
           .from('subdomains')
           .select('*')
-          .eq('user_id', session.id)
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false })
 
         if (data) setSubdomains(data)
@@ -33,14 +33,14 @@ const Dashboard = () => {
       }
     }
     fetchData()
-  }, [session])
+  }, [user])
 
   const handleCreate = async (e) => {
     e.preventDefault()
     setMsg({ type: 'loading', text: 'Menghubungi Cloudflare...' })
     
     try {
-      const apiKey = session?.api_key || session?.user_metadata?.api_key
+      const apiKey = user?.api_key
       const res = await fetch('/api/subdomain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
@@ -53,7 +53,7 @@ const Dashboard = () => {
       setMsg({ type: 'success', text: 'Subdomain aktif!' })
       setFormData({ name: '', type: 'A', target: '' })
       
-      const { data: updated } = await supabase.from('subdomains').select('*').eq('user_id', session.id).order('created_at', { ascending: false })
+      const { data: updated } = await supabase.from('subdomains').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
       if (updated) setSubdomains(updated)
 
     } catch (err) {
@@ -169,7 +169,7 @@ const Dashboard = () => {
                   </div>
                   <div className="flex items-center justify-center md:justify-start gap-3 text-xs text-slate-400">
                     <span className={`px-2 py-0.5 rounded font-mono font-bold ${item.type === 'A' ? 'bg-green-900/30 text-green-400' : 'bg-purple-900/30 text-purple-400'}`}>{item.type}</span>
-                    <span className="font-mono text-slate-500">Points to:</span>
+                    <span className="font-mono text-slate-500">Target:</span>
                     <span className="font-mono text-slate-300 truncate max-w-[200px]">{item.target}</span>
                   </div>
                 </div>
