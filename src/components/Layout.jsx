@@ -1,39 +1,56 @@
 import React, { useState, useEffect } from 'react'
-import { Outlet, Link, useNavigate } from 'react-router-dom'
+import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import Sidebar from './Sidebar'
-import { supabase } from '../lib/supabaseClient'
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [session, setSession] = useState(null)
   const navigate = useNavigate()
+  const location = useLocation()
 
-  useEffect(() => {
-    // 1. Cek Session Manual (LocalStorage) - PRIORITAS UTAMA
-    const localSession = localStorage.getItem('domku_session')
-    
-    if (localSession) {
+  // Fungsi untuk refresh session dari localStorage
+  const refreshSession = () => {
+    const local = localStorage.getItem('domku_session')
+    if (local) {
       try {
-        const user = JSON.parse(localSession)
-        // Format object agar mirip dgn structure supabase session biar kompatibel
-        setSession({ user: { ...user, email: user.email, user_metadata: { name: user.name, api_key: user.api_key } } })
+        setSession(JSON.parse(local))
       } catch (e) {
         localStorage.removeItem('domku_session')
+        setSession(null)
       }
     } else {
-      // 2. Fallback ke Supabase Auth (Jika nanti dipakai)
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) setSession(session)
-      })
+      setSession(null)
     }
+  }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) setSession(session)
-    })
+  useEffect(() => {
+    refreshSession()
+    
+    // Listener khusus jika ada perubahan storage di tab lain atau update profile
+    window.addEventListener('storage', refreshSession)
+    // Custom event untuk update instan
+    window.addEventListener('session-update', refreshSession)
 
-    return () => subscription.unsubscribe()
+    return () => {
+      window.removeEventListener('storage', refreshSession)
+      window.removeEventListener('session-update', refreshSession)
+    }
   }, [])
+
+  // Proteksi Route: Jika tidak ada session & bukan di halaman publik, tendang ke auth
+  useEffect(() => {
+    const publicRoutes = ['/', '/auth', '/verify-email', '/api']
+    const local = localStorage.getItem('domku_session')
+    
+    if (!local && !publicRoutes.includes(location.pathname)) {
+      navigate('/auth')
+    }
+    // Logic Redirect Auto Dashboard jika sudah login akses home/auth
+    if (local && (location.pathname === '/auth' || location.pathname === '/')) {
+      navigate('/subdomain')
+    }
+  }, [location.pathname, navigate])
 
   return (
     <div className="min-h-screen bg-[#0b0c10] text-slate-200">
@@ -49,12 +66,11 @@ const Layout = () => {
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} session={session} />
 
       <main className="pt-20 px-4 pb-10 max-w-7xl mx-auto min-h-screen">
-        <Outlet context={{ session }} />
+        <Outlet context={{ session, refreshSession }} />
       </main>
 
       <footer className="py-6 text-center text-sm text-slate-500 border-t border-blue-900/20 mt-10">
         <p>&copy; 2026 Domku Manager</p>
-        <p className="mt-1">made with ❤️ by Aka 🇮🇩</p>
       </footer>
     </div>
   )
