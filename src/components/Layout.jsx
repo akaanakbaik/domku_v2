@@ -7,40 +7,46 @@ import Loader from './Loader'
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [user, setUser] = useState(null)
-  const [isChecking, setIsChecking] = useState(true) 
+  const [isChecking, setIsChecking] = useState(true) // Default true agar loading dulu
   const navigate = useNavigate()
   const location = useLocation()
 
+  // Fungsi baca session aman
   const refreshSession = () => {
-    const local = localStorage.getItem('domku_session')
-    if (local) {
-      try {
+    try {
+      const local = localStorage.getItem('domku_session')
+      if (local) {
         const parsed = JSON.parse(local)
-        if (parsed && parsed.email) {
+        // Validasi minimal ada ID dan Email
+        if (parsed && parsed.id && parsed.email) {
           setUser(parsed)
         } else {
           localStorage.removeItem('domku_session')
           setUser(null)
         }
-      } catch (e) {
-        localStorage.removeItem('domku_session')
+      } else {
         setUser(null)
       }
-    } else {
+    } catch (e) {
+      console.error("Session Error:", e)
+      localStorage.removeItem('domku_session')
       setUser(null)
     }
   }
 
   useEffect(() => {
-    const initAuth = async () => {
-      setIsChecking(true)
+    const init = async () => {
+      setIsChecking(true) // Mulai checking
       refreshSession()
-      await new Promise(resolve => setTimeout(resolve, 300))
-      setIsChecking(false)
+      
+      // Beri sedikit jeda agar transisi halus dan memastikan state terupdate
+      await new Promise(r => setTimeout(r, 500))
+      
+      setIsChecking(false) // Selesai checking
     }
 
-    initAuth()
-    
+    init()
+
     window.addEventListener('storage', refreshSession)
     window.addEventListener('session-update', refreshSession)
 
@@ -50,21 +56,25 @@ const Layout = () => {
     }
   }, [])
 
+  // Proteksi Route
   useEffect(() => {
-    if (isChecking) return
+    if (isChecking) return // Jangan redirect kalau masih checking
 
     const publicRoutes = ['/', '/auth', '/verify-email', '/api']
     const isPublic = publicRoutes.includes(location.pathname)
 
+    // Jika tidak ada user dan bukan halaman publik -> Lempar ke Auth
     if (!user && !isPublic) {
       navigate('/auth', { replace: true })
     }
 
+    // Jika ada user tapi buka halaman Auth -> Lempar ke Dashboard
     if (user && location.pathname === '/auth') {
       navigate('/subdomain', { replace: true })
     }
   }, [user, isChecking, location.pathname, navigate])
 
+  // TAMPILKAN LOADER SELAMA CHECKING (Mencegah Stuck/Blank Page)
   if (isChecking) {
     return <Loader />
   }
@@ -86,8 +96,12 @@ const Layout = () => {
           )}
           {user && (
              <div onClick={() => navigate('/settings')} className="hidden md:flex items-center gap-2 cursor-pointer hover:bg-white/5 px-3 py-1.5 rounded-full transition-colors">
-                <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs text-white font-bold border border-blue-400">
-                  {user.name?.charAt(0).toUpperCase()}
+                <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs text-white font-bold border border-blue-400 overflow-hidden">
+                  {user.avatar_url ? (
+                    <img src={user.avatar_url} alt="Av" className="w-full h-full object-cover" />
+                  ) : (
+                    user.name?.charAt(0).toUpperCase()
+                  )}
                 </div>
                 <span className="text-sm text-slate-300 font-medium max-w-[100px] truncate">{user.name}</span>
              </div>
