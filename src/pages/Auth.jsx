@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react'
 import Loader from '../components/Loader'
-import { supabase } from '../lib/supabaseClient' // Import supabase untuk SignOut
 
 const Auth = () => {
   const navigate = useNavigate()
@@ -16,22 +15,32 @@ const Auth = () => {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value })
 
-  // Improved Safe Fetch
-  const safeFetch = async (url, options) => {
+  // --- OPTIMIZED FETCH WITH TIMEOUT (20 Detik) ---
+  const safeFetch = async (url, options = {}) => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 20000) // 20 Detik Timeout
+
     try {
-      const res = await fetch(url, options)
+      const res = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
+
       const isJson = res.headers.get('content-type')?.includes('application/json')
-      
       const data = isJson ? await res.json() : null
 
       if (!res.ok) {
-        // Jika server error (400/500) tapi kirim JSON error
         throw new Error(data?.error || `Server Error: ${res.statusText}`)
       }
       return data
+
     } catch (e) {
-      // Jika fetch gagal total (network error)
-      throw new Error(e.message || "Gagal terhubung ke server. Periksa koneksi Anda.")
+      clearTimeout(timeoutId)
+      if (e.name === 'AbortError') {
+        throw new Error("Koneksi timeout. Server sedang sibuk, silakan coba lagi.")
+      }
+      throw new Error(e.message || "Gagal terhubung ke server.")
     }
   }
 
@@ -53,7 +62,6 @@ const Auth = () => {
         })
       })
       
-      if (!data.success) throw new Error(data.error)
       setSuccessMsg(data.message)
       setFormData({ ...formData, name: '', email: '', password: '' })
     } catch (err) {
@@ -69,16 +77,12 @@ const Auth = () => {
     setError('')
 
     try {
-      // Pastikan logout dulu biar bersih
-      await supabase.auth.signOut()
-
+      // Langsung tembak API kita (Lebih cepat & stabil daripada cek supabase auth client dulu)
       const data = await safeFetch('/api/auth/login-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: formData.email, password: formData.password })
       })
-
-      if (!data.success) throw new Error(data.error)
 
       setLoginStep(2)
       setSuccessMsg("Kode OTP telah dikirim ke Email.")
@@ -101,9 +105,7 @@ const Auth = () => {
         body: JSON.stringify({ email: formData.email, code: formData.otp })
       })
 
-      if (!data.success) throw new Error(data.error)
-
-      // Sukses! Redirect ke dashboard
+      // Redirect
       navigate('/subdomain')
     } catch (err) {
       setError(err.message)
