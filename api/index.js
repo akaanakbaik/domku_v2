@@ -10,6 +10,7 @@ dotenv.config()
 
 const app = express()
 
+// Pastikan menggunakan Service Role Key
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -26,7 +27,7 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-// --- HTML EMAIL TEMPLATE (PROFESSIONAL) ---
+// --- HTML EMAIL TEMPLATE ---
 const sendEmail = async (to, subject, title, message, buttonText, buttonLink) => {
   const htmlContent = `
     <!DOCTYPE html>
@@ -53,8 +54,9 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
           <div class="h1">${title}</div>
           <p>${message}</p>
           ${buttonText ? `<div style="text-align: center;"><a href="${buttonLink}" class="btn">${buttonText}</a></div>` : ''}
-          ${!buttonText && buttonLink ? `<div class="otp-box">${buttonLink}</div>` : ''} <p style="margin-top: 30px; font-size: 13px; color: #71717a;">
-            Jika Anda tidak merasa melakukan permintaan ini, abaikan saja email ini.
+          ${!buttonText && buttonLink ? `<div class="otp-box">${buttonLink}</div>` : ''} 
+          <p style="margin-top: 30px; font-size: 13px; color: #71717a;">
+            Abaikan jika ini bukan permintaan Anda.
           </p>
         </div>
         <div class="footer">
@@ -77,7 +79,7 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
 const NAME_REGEX = /^[a-zA-Z0-9#!_-]+$/
 
 app.get('/api', (req, res) => {
-  res.status(200).json({ status: 'Online', system: 'Domku V3.1 Final' })
+  res.status(200).json({ status: 'Online', system: 'Domku V3.2 Stable' })
 })
 
 // --- REGISTER ---
@@ -85,29 +87,19 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password, origin } = req.body
 
-    // 1. Validasi Input
-    if (!name || !email || !password) return res.status(400).json({ success: false, error: "Semua kolom wajib diisi." })
-    if (!NAME_REGEX.test(name)) return res.status(400).json({ success: false, error: "Nama mengandung karakter tidak valid." })
+    if (!name || !email || !password) return res.status(400).json({ success: false, error: "Data tidak lengkap." })
+    if (!NAME_REGEX.test(name)) return res.status(400).json({ success: false, error: "Nama mengandung karakter ilegal." })
     if (password.length < 6) return res.status(400).json({ success: false, error: "Password minimal 6 karakter." })
 
-    // 2. Cek apakah Email sudah ada di AUTH SUPABASE (User asli)
-    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers()
-    if (listError) throw listError
-    
-    // Cari manual karena listUsers pagination, tapi untuk skala kecil ini ok. 
-    // Lebih aman pakai getByEmail kalau ada service role, tapi listUsers array filter cukup.
+    // Cek User di Auth Supabase
+    const { data: { users } } = await supabase.auth.admin.listUsers()
     const userExists = users.find(u => u.email === email)
-    if (userExists) return res.status(400).json({ success: false, error: "Email sudah terdaftar (Auth)." })
+    if (userExists) return res.status(400).json({ success: false, error: "Email sudah terdaftar." })
 
-    // 3. Cek apakah Email ada di PENDING (Sedang menunggu verifikasi)
-    const { data: pendingCheck } = await supabase.from('pending_registrations').select('id').eq('email', email).single()
-    
-    // Logic: Jika ada di pending, kita UPDATE tokennya (Resend Link), bukan error.
     const salt = await bcrypt.genSalt(10)
     const passwordHash = await bcrypt.hash(password, salt)
     const token = crypto.randomBytes(32).toString('hex')
 
-    // 4. Simpan/Update Pending
     const { error: dbError } = await supabase
       .from('pending_registrations')
       .upsert({ 
@@ -120,68 +112,87 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (dbError) throw new Error(dbError.message)
 
-    // 5. Kirim Email HTML
     const verifyLink = `${origin}/verify-email?token=${token}`
     await sendEmail(
       email,
-      'Verifikasi Akun Domku',
-      `Halo, ${name}!`,
-      'Terima kasih telah bergabung. Langkah terakhir, silakan verifikasi email Anda untuk mengaktifkan akun.',
-      'Verifikasi Email Saya',
+      'Verifikasi Akun',
+      `Selamat Datang, ${name}!`,
+      'Klik tombol di bawah untuk mengaktifkan akun Anda.',
+      'Verifikasi Sekarang',
       verifyLink
     )
 
-    res.json({ success: true, message: 'Link verifikasi dikirim.' })
-
+    res.json({ success: true, message: 'Email verifikasi terkirim.' })
   } catch (error) {
-    console.error("Reg Error:", error)
+    console.error("Register Error:", error)
     res.status(500).json({ success: false, error: error.message || "Server Error" })
   }
 })
 
-// --- VERIFY EMAIL ---
+// --- VERIFY EMAIL (DIPERBAIKI: Logic Anti-Conflict) ---
 app.post('/api/auth/verify-email', async (req, res) => {
   try {
     const { token } = req.body
 
+    // 1. Ambil data Pending
     const { data: pending, error } = await supabase.from('pending_registrations').select('*').eq('token', token).single()
     if (error || !pending) return res.status(400).json({ success: false, error: "Token tidak valid." })
 
-    // Generate Key
+    // 2. Generate API Key
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
     const apiKey = Array.from({length: 12}, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 
-    // 1. Create User di Supabase Auth (Agar bisa login session kedepannya jika mau)
-    const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
-      email: pending.email,
-      password: "DOMKU_SECURE_" + crypto.randomBytes(10).toString('hex'), // Password sampah, karena kita pakai login manual
-      user_metadata: { name: pending.name, api_key: apiKey },
-      email_confirm: true
-    })
-    
-    if (createError) throw new Error("Auth Creation Failed: " + createError.message)
+    let userId = null
 
-    // 2. Simpan ke Public Users dengan Password Hash dari input user
-    const { error: insertError } = await supabase.from('users').insert({
-      id: authUser.user.id,
+    // 3. CEK USER DI AUTH DULU (Anti-Error "Checking Email")
+    const { data: { users } } = await supabase.auth.admin.listUsers()
+    const existingAuthUser = users.find(u => u.email === pending.email)
+
+    if (existingAuthUser) {
+      // Jika user hantu masih ada, kita pakai ID-nya (Recycle)
+      userId = existingAuthUser.id
+      console.log("User Auth sudah ada, menggunakan ID lama:", userId)
+      
+      // Update metadata user lama
+      await supabase.auth.admin.updateUserById(userId, {
+        user_metadata: { name: pending.name, api_key: apiKey },
+        email_confirm: true
+      })
+    } else {
+      // Jika bersih, buat baru
+      const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
+        email: pending.email,
+        password: "DOMKU_SECURE_" + crypto.randomBytes(10).toString('hex'),
+        user_metadata: { name: pending.name, api_key: apiKey },
+        email_confirm: true
+      })
+      
+      if (createError) {
+        // Jika error "Checking Email" muncul di sini, itu karena Race Condition atau Trigger.
+        // Kita throw error agar frontend tau
+        throw new Error("Auth Creation Failed: " + createError.message)
+      }
+      userId = authUser.user.id
+    }
+
+    // 4. Masukkan ke Public Users (Upsert agar jika ada data lama tertimpa)
+    const { error: insertError } = await supabase.from('users').upsert({
+      id: userId,
       email: pending.email,
       name: pending.name,
       api_key: apiKey,
       password_hash: pending.password_hash 
     })
 
-    if (insertError) {
-      // Rollback: Hapus auth user jika insert db gagal
-      await supabase.auth.admin.deleteUser(authUser.user.id)
-      throw new Error("DB Insert Failed: " + insertError.message)
-    }
+    if (insertError) throw new Error("DB Public Insert Failed: " + insertError.message)
 
-    // 3. Hapus Pending
+    // 5. Hapus Pending
     await supabase.from('pending_registrations').delete().eq('id', pending.id)
 
-    res.json({ success: true, message: 'Akun aktif.' })
+    res.json({ success: true, message: 'Akun berhasil diverifikasi.' })
 
   } catch (error) {
+    console.error("Verify Error:", error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
@@ -191,41 +202,28 @@ app.post('/api/auth/login-check', async (req, res) => {
   try {
     const { email, password } = req.body
 
-    // 1. Cek User DB
     const { data: user, error } = await supabase.from('users').select('*').eq('email', email).single()
     
-    // Error handling khusus agar tidak "Failed to connect"
-    if (error && error.code === 'PGRST116') { // Kode Supabase untuk "Row not found"
-       return res.status(400).json({ success: false, error: "Email belum terdaftar." })
-    }
-    if (error) throw error
+    if (error || !user) return res.status(400).json({ success: false, error: "Email belum terdaftar." })
 
-    // 2. Cek Password
     const isValid = await bcrypt.compare(password, user.password_hash)
     if (!isValid) return res.status(400).json({ success: false, error: "Password salah." })
 
-    // 3. Generate OTP
     const code = Math.floor(1000 + Math.random() * 9000).toString()
-    const { error: otpError } = await supabase
-      .from('verification_codes')
-      .upsert({ email, code, created_at: new Date() }, { onConflict: 'email' })
-    if (otpError) throw otpError
+    await supabase.from('verification_codes').upsert({ email, code }, { onConflict: 'email' })
 
-    // 4. Kirim OTP HTML
     await sendEmail(
       email,
       'Kode OTP Masuk',
-      'Permintaan Masuk',
-      'Gunakan kode di bawah ini untuk masuk ke dashboard Domku. Kode berlaku 5 menit.',
-      null, // No Button
-      code // OTP Code
+      'Kode Keamanan',
+      'Gunakan kode di bawah ini untuk masuk ke akun Anda.',
+      null,
+      code
     )
 
     res.json({ success: true, message: 'OTP dikirim' })
-
   } catch (error) {
-    console.error("Login Check Error:", error)
-    res.status(500).json({ success: false, error: error.message || "Terjadi kesalahan server." })
+    res.status(500).json({ success: false, error: error.message || "Server Error" })
   }
 })
 
@@ -244,7 +242,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 })
 
-// --- SUBDOMAIN (Tetap Sama) ---
+// --- SUBDOMAIN ---
 app.post('/api/subdomain', async (req, res) => {
   const apiKey = req.headers['x-api-key']
   if (!apiKey) return res.status(401).json({ success: false, error: "API Key Required" })
