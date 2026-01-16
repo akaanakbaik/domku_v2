@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { X, Home, Globe, Code, Info, LogOut, User } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { X, Home, Globe, Code, Info, LogOut } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 const Sidebar = ({ isOpen, onClose, session }) => {
@@ -75,10 +75,6 @@ const Sidebar = ({ isOpen, onClose, session }) => {
                 <span className="text-xs text-blue-400">Online</span>
               </div>
             </div>
-            
-            <div className="mt-3 px-2 py-1 bg-black/40 rounded border border-blue-900/30 flex justify-between items-center">
-               <span className="text-[10px] text-slate-500 font-mono">API: {session.user.user_metadata?.api_key || 'Generate...'}</span>
-            </div>
           </div>
         ) : (
           <div className="p-4 border-t border-blue-900/20">
@@ -96,7 +92,7 @@ const Sidebar = ({ isOpen, onClose, session }) => {
         <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 bg-black/80">
           <div className="bg-[#1a1d24] p-6 rounded-xl border border-blue-500/30 max-w-sm w-full text-center shadow-2xl shadow-blue-900/20">
             <h3 className="text-xl font-bold text-white mb-2">Akses Terbatas</h3>
-            <p className="text-slate-400 mb-6 text-sm">Anda harus Daftar atau Login terlebih dahulu untuk membuat subdomain.</p>
+            <p className="text-slate-400 mb-6 text-sm">Anda harus Daftar atau Login terlebih dahulu.</p>
             <div className="flex gap-3">
               <button 
                 onClick={() => setShowLoginAlert(false)}
@@ -116,13 +112,13 @@ const Sidebar = ({ isOpen, onClose, session }) => {
       )}
 
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-[70] flex items-end md:items-center justify-center p-4 bg-black/80">
-          <div className="bg-[#1a1d24] w-full max-w-sm p-5 rounded-xl border border-red-500/20 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80">
+          <div className="bg-[#1a1d24] w-full max-w-sm p-5 rounded-xl border border-red-500/20">
             <div className="flex items-center gap-3 mb-4 text-red-400">
               <LogOut size={24} />
               <span className="font-bold text-lg">Konfirmasi Keluar</span>
             </div>
-            <p className="text-slate-400 mb-6 text-sm">Apakah Anda yakin ingin keluar dari akun ini?</p>
+            <p className="text-slate-400 mb-6 text-sm">Yakin ingin keluar?</p>
             <div className="flex flex-col gap-2">
               <button 
                 onClick={handleLogout}
