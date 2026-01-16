@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Home from './pages/Home'
 import Auth from './pages/Auth'
+import VerifyEmail from './pages/VerifyEmail'
 import Dashboard from './pages/Dashboard'
 import ApiDocs from './pages/ApiDocs'
 import Layout from './components/Layout'
@@ -26,6 +27,7 @@ function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
         <Route path="/auth" element={<Auth />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/subdomain" element={<Dashboard />} />
         <Route path="/api" element={<ApiDocs />} />
       </Route>
