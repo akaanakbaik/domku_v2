@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Globe, Trash2, Copy, AlertCircle, Plus, Check } from 'lucide-react'
+import { Globe, Trash2, Copy, AlertCircle, Check } from 'lucide-react'
 import Loader from '../components/Loader'
 
 const Dashboard = () => {
@@ -86,10 +86,6 @@ const Dashboard = () => {
 
   const handleDelete = async (id, cfId) => {
     if (!confirm('Hapus subdomain ini?')) return
-    
-    // Note: Idealnya ada endpoint DELETE, tapi untuk simplifikasi kita hapus dari DB 
-    // dan user bisa hapus manual di CF atau kita buat endpoint remove nanti.
-    // Di sini kita simulasikan hapus DB saja agar UI responsif.
     
     await supabase.from('subdomains').delete().eq('id', id)
     setSubdomains(prev => prev.filter(item => item.id !== id))
