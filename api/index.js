@@ -7,7 +7,6 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 3000
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -25,8 +24,8 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-app.get('/', (req, res) => {
-  res.send('Domku API is Running')
+app.get('/api', (req, res) => {
+  res.json({ status: 'API Online', author: 'Aka' })
 })
 
 app.post('/api/auth/send-code', async (req, res) => {
