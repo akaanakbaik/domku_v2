@@ -25,7 +25,7 @@ const transporter = nodemailer.createTransport({
 })
 
 app.get('/api', (req, res) => {
-  res.json({ status: 'API Online', author: 'Aka' })
+  res.json({ status: 'Online', system: 'Domku V2' })
 })
 
 app.post('/api/auth/send-code', async (req, res) => {
