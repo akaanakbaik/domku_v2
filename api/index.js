@@ -14,17 +14,14 @@ dotenv.config()
 
 const app = express()
 
-// Konfigurasi Upload
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 2 * 1024 * 1024 } 
 })
 
-// --- MIDDLEWARE ---
-
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, 
-  max: 60, 
+  max: 100, 
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: "Rate limit exceeded." }
@@ -41,8 +38,6 @@ app.use(cors({ origin: true, credentials: true }))
 app.use(express.json({ limit: '10kb' })) 
 app.use(limiter)
 
-// --- KONEKSI ---
-
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -56,8 +51,6 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-// --- KONFIGURASI ---
-
 const BANNED_SUBDOMAINS = [
   'www', 'mail', 'remote', 'blog', 'webmail', 'server', 'ns1', 'ns2', 'smtp', 'secure', 
   'vpn', 'm', 'shop', 'admin', 'panel', 'cpanel', 'whm', 'billing', 'support', 'test', 
@@ -65,8 +58,6 @@ const BANNED_SUBDOMAINS = [
 ]
 
 const SUBDOMAIN_REGEX = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/
-
-// --- HELPER FUNCTIONS ---
 
 const logActivity = async (userId, action, details, req) => {
   try {
@@ -96,22 +87,17 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
   }
 }
 
-// --- ROUTES ---
-
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '4.7.0 (Stable)' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '4.8.0' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
-// 1. CREATE SUBDOMAIN (PERBAIKAN UTAMA DI SINI)
 app.post('/api/subdomain', limiter, async (req, res) => {
   try {
-    // 1. Validasi API Key
     const apiKey = req.headers['x-api-key']
     if (!apiKey) return res.status(401).json({ success: false, error: "API Key required" })
 
     const { data: user, error: userError } = await supabase.from('users').select('id, email').eq('api_key', apiKey).single()
     if (userError || !user) return res.status(403).json({ success: false, error: "Invalid API Key" })
 
-    // 2. Validasi Input (Safe Mode)
     const rawSubdomain = req.body.subdomain || ''
     const rawTarget = req.body.target || ''
     const recordType = req.body.recordType || 'A'
@@ -121,21 +107,17 @@ app.post('/api/subdomain', limiter, async (req, res) => {
 
     if (!subdomain || !target) return res.status(400).json({ success: false, error: "Subdomain & Target wajib diisi" })
     
-    // 3. Regex & Rules
-    if (!SUBDOMAIN_REGEX.test(subdomain)) return res.status(400).json({ success: false, error: "Format nama salah (Huruf, Angka, Titik, Strip)" })
-    if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Nama ini dilarang" })
-    if (subdomain.length < 3 || subdomain.length > 63) return res.status(400).json({ success: false, error: "Panjang nama 3-63 karakter" })
+    if (!SUBDOMAIN_REGEX.test(subdomain)) return res.status(400).json({ success: false, error: "Format nama salah" })
+    if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Nama dilarang" })
+    if (subdomain.length < 3 || subdomain.length > 63) return res.status(400).json({ success: false, error: "Panjang 3-63 karakter" })
 
-    // 4. Limit Check
     const { count } = await supabase.from('subdomains').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
-    if (count >= 30) return res.status(400).json({ success: false, error: "Limit Max 30 Subdomain tercapai" })
+    if (count >= 30) return res.status(400).json({ success: false, error: "Limit Max 30" })
 
-    // 5. Cloudflare Env Check
     if (!process.env.CLOUDFLARE_ZONE_ID || !process.env.CLOUDFLARE_EMAIL || !process.env.CLOUDFLARE_API_KEY) {
-        throw new Error("Server Misconfiguration: Cloudflare Credentials Missing")
+        throw new Error("Server Misconfiguration")
     }
 
-    // 6. CLOUDFLARE CHECK (SAFE MODE)
     const checkUrl = `https://api.cloudflare.com/client/v4/zones/${process.env.CLOUDFLARE_ZONE_ID}/dns_records?name=${subdomain}.domku.my.id`
     
     const checkCf = await fetch(checkUrl, {
@@ -143,21 +125,12 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     })
     
     const checkData = await checkCf.json()
-
-    // DEBUGGING: Log jika Cloudflare gagal (Cek Vercel Logs jika masih error)
-    if (!checkData.success) {
-       console.error("Cloudflare Check Error:", JSON.stringify(checkData.errors))
-       // Jangan stop dulu, biarkan logic fallback berjalan
-    }
-
-    // FIX: Gunakan (checkData.result || []) agar tidak crash saat result null
     const existingRecords = checkData.result || []
 
     if (existingRecords.length > 0) {
-      return res.status(400).json({ success: false, error: "Subdomain sudah digunakan orang lain" })
+      return res.status(400).json({ success: false, error: "Subdomain sudah digunakan" })
     }
 
-    // 7. CLOUDFLARE CREATE
     const cfResponse = await fetch(`https://api.cloudflare.com/client/v4/zones/${process.env.CLOUDFLARE_ZONE_ID}/dns_records`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Email': process.env.CLOUDFLARE_EMAIL, 'X-Auth-Key': process.env.CLOUDFLARE_API_KEY },
@@ -171,7 +144,6 @@ app.post('/api/subdomain', limiter, async (req, res) => {
       throw new Error(errMsg)
     }
 
-    // 8. Simpan ke DB
     await supabase.from('subdomains').insert({ 
         user_id: user.id, 
         name: `${subdomain}.domku.my.id`, 
@@ -190,7 +162,6 @@ app.post('/api/subdomain', limiter, async (req, res) => {
   }
 })
 
-// 2. REGISTER
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const name = xss(req.body.name || '')
@@ -201,9 +172,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     if (!name || !email || !password) return res.status(400).json({ success: false, error: "Data incomplete" })
     
     const { data: userList } = await supabase.auth.admin.listUsers()
-    
-    // FIX: Safe navigation untuk userList
     const users = userList?.users || []
+    
     if (users.find(u => u.email === email)) return res.status(400).json({ success: false, error: "Email already registered" })
 
     const salt = await bcrypt.genSalt(10)
@@ -219,7 +189,6 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   }
 })
 
-// 3. VERIFY EMAIL
 app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
   try {
     const { token } = req.body
@@ -256,7 +225,6 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
   }
 })
 
-// 4. LOGIN & OTP
 app.post('/api/auth/login-check', authLimiter, async (req, res) => {
   try {
     const email = xss(req.body.email || '')
@@ -294,7 +262,6 @@ app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
   }
 })
 
-// 5. UPDATE PROFILE
 app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) => {
   try {
     const email = xss(req.body.email || '')
@@ -324,7 +291,6 @@ app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) =
   }
 })
 
-// 6. PASSWORD
 app.post('/api/user/change-password', async (req, res) => {
   try {
     const { email, oldPassword, newPassword } = req.body
@@ -333,6 +299,7 @@ app.post('/api/user/change-password', async (req, res) => {
     
     const newHash = await bcrypt.hash(newPassword, 10)
     await supabase.from('users').update({ password_hash: newHash }).eq('email', email)
+    await logActivity(user.id, 'CHANGE_PASSWORD', 'Success', req)
     
     res.json({ success: true, message: 'Changed' })
   } catch (e) { res.status(500).json({success: false, error: e.message}) }
@@ -366,7 +333,6 @@ app.post('/api/user/reset-password-confirm', async (req, res) => {
   } catch (e) { res.status(500).json({success:false, error: e.message}) }
 })
 
-// 7. IP LOOKUP
 app.get('/api/lookup-ip', async (req, res) => {
     try {
         const lookup = await fetch(`http://ip-api.com/json/${req.query.ip || ''}`)
