@@ -23,11 +23,11 @@ const upload = multer({
 // --- MIDDLEWARE ---
 
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 menit
-  max: 60, // Diperlonggar untuk testing
+  windowMs: 1 * 60 * 1000, 
+  max: 60, 
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: "Rate limit exceeded. Try again later." }
+  message: { success: false, error: "Rate limit exceeded." }
 })
 
 const authLimiter = rateLimit({
@@ -78,7 +78,7 @@ const logActivity = async (userId, action, details, req) => {
       ip_address: ip
     })
   } catch (e) {
-    console.error("Log failed (Non-critical):", e.message)
+    console.error("Log failed:", e.message)
   }
 }
 
@@ -98,10 +98,10 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
 
 // --- ROUTES ---
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '4.6.0' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '4.7.0 (Stable)' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
-// 1. CREATE SUBDOMAIN (FIXED CRASH HERE)
+// 1. CREATE SUBDOMAIN (PERBAIKAN UTAMA DI SINI)
 app.post('/api/subdomain', limiter, async (req, res) => {
   try {
     // 1. Validasi API Key
@@ -116,7 +116,6 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const rawTarget = req.body.target || ''
     const recordType = req.body.recordType || 'A'
 
-    // Cegah crash .toLowerCase() pada undefined
     const subdomain = xss(rawSubdomain).toLowerCase()
     const target = xss(rawTarget)
 
@@ -131,9 +130,9 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const { count } = await supabase.from('subdomains').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
     if (count >= 30) return res.status(400).json({ success: false, error: "Limit Max 30 Subdomain tercapai" })
 
-    // 5. Cloudflare Config Check
+    // 5. Cloudflare Env Check
     if (!process.env.CLOUDFLARE_ZONE_ID || !process.env.CLOUDFLARE_EMAIL || !process.env.CLOUDFLARE_API_KEY) {
-        throw new Error("Server Misconfiguration: Missing Cloudflare Env")
+        throw new Error("Server Misconfiguration: Cloudflare Credentials Missing")
     }
 
     // 6. CLOUDFLARE CHECK (SAFE MODE)
@@ -145,13 +144,16 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     
     const checkData = await checkCf.json()
 
-    // Defensive Check: Pastikan property ada sebelum akses
+    // DEBUGGING: Log jika Cloudflare gagal (Cek Vercel Logs jika masih error)
     if (!checkData.success) {
-       console.error("CF Check Error:", checkData.errors)
-       // Jangan return error disini, lanjut coba create atau return pesan spesifik
+       console.error("Cloudflare Check Error:", JSON.stringify(checkData.errors))
+       // Jangan stop dulu, biarkan logic fallback berjalan
     }
 
-    if (checkData.result && Array.isArray(checkData.result) && checkData.result.length > 0) {
+    // FIX: Gunakan (checkData.result || []) agar tidak crash saat result null
+    const existingRecords = checkData.result || []
+
+    if (existingRecords.length > 0) {
       return res.status(400).json({ success: false, error: "Subdomain sudah digunakan orang lain" })
     }
 
@@ -165,8 +167,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const cfData = await cfResponse.json()
     
     if (!cfData.success) {
-      // Ambil pesan error dengan aman
-      const errMsg = cfData.errors?.[0]?.message || JSON.stringify(cfData.errors) || 'Cloudflare Unknown Error'
+      const errMsg = cfData.errors?.[0]?.message || 'Cloudflare Creation Failed'
       throw new Error(errMsg)
     }
 
@@ -176,7 +177,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
         name: `${subdomain}.domku.my.id`, 
         target, 
         type: recordType, 
-        cf_id: cfData.result?.id || 'unknown_id' // Safe access
+        cf_id: cfData.result?.id || 'unknown'
     })
     
     await logActivity(user.id, 'CREATE_SUBDOMAIN', `Created ${subdomain}.domku.my.id`, req)
@@ -184,7 +185,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     res.json({ success: true, data: cfData.result })
 
   } catch (error) {
-    console.error("Subdomain API Error:", error) // Log ke server console
+    console.error("API Error:", error)
     res.status(500).json({ success: false, error: error.message || "Internal Server Error" })
   }
 })
@@ -200,14 +201,17 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     if (!name || !email || !password) return res.status(400).json({ success: false, error: "Data incomplete" })
     
     const { data: userList } = await supabase.auth.admin.listUsers()
-    if (userList?.users?.find(u => u.email === email)) return res.status(400).json({ success: false, error: "Email already registered" })
+    
+    // FIX: Safe navigation untuk userList
+    const users = userList?.users || []
+    if (users.find(u => u.email === email)) return res.status(400).json({ success: false, error: "Email already registered" })
 
     const salt = await bcrypt.genSalt(10)
     const passwordHash = await bcrypt.hash(password, salt)
     const token = crypto.randomBytes(32).toString('hex')
 
     await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash, token }, { onConflict: 'email' })
-    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut untuk verifikasi:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
+    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
     
     res.json({ success: true, message: 'Email verifikasi terkirim.' })
   } catch (error) {
@@ -226,7 +230,8 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
     let userId
 
     const { data: userList } = await supabase.auth.admin.listUsers()
-    const existing = userList?.users?.find(u => u.email === pending.email)
+    const users = userList?.users || []
+    const existing = users.find(u => u.email === pending.email)
 
     if (existing) {
       userId = existing.id
@@ -243,7 +248,7 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
 
     await supabase.from('users').upsert({ id: userId, email: pending.email, name: pending.name, api_key: apiKey, password_hash: pending.password_hash })
     await supabase.from('pending_registrations').delete().eq('id', pending.id)
-    await logActivity(userId, 'REGISTER', 'Success Verify', req)
+    await logActivity(userId, 'REGISTER', 'Verified', req)
 
     res.json({ success: true, message: 'Verified.' })
   } catch (error) {
@@ -265,7 +270,7 @@ app.post('/api/auth/login-check', authLimiter, async (req, res) => {
 
     const code = Math.floor(1000 + Math.random() * 9000).toString()
     await supabase.from('verification_codes').upsert({ email, code }, { onConflict: 'email' })
-    await sendEmail(email, 'Login OTP', 'Login Code', 'Your OTP Code is:', null, code)
+    await sendEmail(email, 'Login OTP', 'Login Code', 'OTP Code:', null, code)
 
     res.json({ success: true, message: 'OTP Sent' })
   } catch (error) {
@@ -281,7 +286,7 @@ app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
     await supabase.from('verification_codes').delete().eq('email', email)
-    await logActivity(user.id, 'LOGIN', 'Success Login OTP', req)
+    await logActivity(user.id, 'LOGIN', 'Success', req)
 
     res.json({ success: true, user })
   } catch (error) {
@@ -319,18 +324,17 @@ app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) =
   }
 })
 
-// 6. PASSWORD (CHANGE & RESET)
+// 6. PASSWORD
 app.post('/api/user/change-password', async (req, res) => {
   try {
     const { email, oldPassword, newPassword } = req.body
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
-    if (!await bcrypt.compare(oldPassword, user.password_hash)) return res.status(400).json({ success: false, error: "Old password wrong" })
+    if (!await bcrypt.compare(oldPassword, user.password_hash)) return res.status(400).json({ success: false, error: "Wrong password" })
     
     const newHash = await bcrypt.hash(newPassword, 10)
     await supabase.from('users').update({ password_hash: newHash }).eq('email', email)
-    await logActivity(user.id, 'CHANGE_PASSWORD', 'Success', req)
     
-    res.json({ success: true, message: 'Password changed' })
+    res.json({ success: true, message: 'Changed' })
   } catch (e) { res.status(500).json({success: false, error: e.message}) }
 })
 
