@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { User, Key, Lock, Upload, Copy, ShieldAlert, Monitor, Globe, Trash2, Calendar, Hash } from 'lucide-react'
+import { User, Key, Lock, Upload, Copy, ShieldAlert, Monitor, Globe, Trash2, Calendar, Smartphone, Edit3, Bell, Save } from 'lucide-react'
 import Loader from '../components/Loader'
 
 const Settings = () => {
@@ -12,7 +12,10 @@ const Settings = () => {
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState({ type: '', text: '' })
   
+  // Form States
   const [newName, setNewName] = useState('')
+  const [newBio, setNewBio] = useState('')
+  const [newPhone, setNewPhone] = useState('')
   const [previewImg, setPreviewImg] = useState(null)
   const [fileToUpload, setFileToUpload] = useState(null)
   
@@ -21,8 +24,8 @@ const Settings = () => {
   const [resetOtp, setResetOtp] = useState('')
   const [resetNewPass, setResetNewPass] = useState('')
 
-  // INFO BARU
-  const [ipAddress, setIpAddress] = useState('Memuat...')
+  // Info System
+  const [ipAddress, setIpAddress] = useState('Loading...')
   const [deviceInfo, setDeviceInfo] = useState('')
 
   const fileInputRef = useRef(null)
@@ -30,51 +33,30 @@ const Settings = () => {
   useEffect(() => {
     if (user) {
       setNewName(user.name || '')
+      setNewBio(user.bio || '')
+      setNewPhone(user.phone || '')
       setPreviewImg(user.avatar_url || null)
       
-      // Ambil IP
-      fetch('https://api.ipify.org?format=json')
-        .then(res => res.json())
-        .then(data => setIpAddress(data.ip))
-        .catch(() => setIpAddress('Gagal memuat'))
-
-      // Ambil Info Perangkat Sederhana
-      const ua = navigator.userAgent
-      let os = "Unknown OS"
-      if (ua.indexOf("Win") !== -1) os = "Windows"
-      if (ua.indexOf("Mac") !== -1) os = "MacOS"
-      if (ua.indexOf("Linux") !== -1) os = "Linux"
-      if (ua.indexOf("Android") !== -1) os = "Android"
-      if (ua.indexOf("like Mac") !== -1) os = "iOS"
-      setDeviceInfo(`${os} - ${navigator.vendor || 'Browser'}`)
+      // IP & Device Check
+      fetch('https://api.ipify.org?format=json').then(r => r.json()).then(d => setIpAddress(d.ip)).catch(() => setIpAddress('Hidden'))
+      setDeviceInfo(navigator.platform || 'Unknown Device')
     }
   }, [user])
 
-  if (!user) {
-    return <div className="flex justify-center pt-20"><Loader /></div>
-  }
+  if (!user) return <div className="flex justify-center pt-20"><Loader /></div>
 
   const showMsg = (type, text) => {
     setMsg({ type, text })
-    setTimeout(() => setMsg({ type: '', text: '' }), 4000)
+    setTimeout(() => setMsg({ type: '', text: '' }), 3000)
   }
 
   const handleFileChange = (e) => {
     const file = e.target.files[0]
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) return showMsg('error', 'Ukuran max 2MB')
+    if (file && file.size < 2 * 1024 * 1024) {
       setFileToUpload(file)
       setPreviewImg(URL.createObjectURL(file))
-    }
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    const file = e.dataTransfer.files[0]
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) return showMsg('error', 'Ukuran max 2MB')
-      setFileToUpload(file)
-      setPreviewImg(URL.createObjectURL(file))
+    } else {
+      showMsg('error', 'File terlalu besar (Max 2MB)')
     }
   }
 
@@ -85,6 +67,8 @@ const Settings = () => {
       const formData = new FormData()
       formData.append('email', user.email)
       formData.append('name', newName)
+      formData.append('bio', newBio)
+      formData.append('phone', newPhone)
       if (fileToUpload) formData.append('avatar', fileToUpload)
 
       const res = await fetch('/api/user/update-profile', { method: 'POST', body: formData })
@@ -93,8 +77,7 @@ const Settings = () => {
 
       localStorage.setItem('domku_session', JSON.stringify({ ...user, ...data.user }))
       if (refreshSession) refreshSession()
-      
-      showMsg('success', 'Profil diperbarui!')
+      showMsg('success', 'Profil disimpan!')
     } catch (err) {
       showMsg('error', err.message)
     } finally {
@@ -113,7 +96,7 @@ const Settings = () => {
       })
       const data = await res.json()
       if (!data.success) throw new Error(data.error)
-      showMsg('success', 'Password berhasil diubah!')
+      showMsg('success', 'Password diubah!')
       setPassData({ old: '', new: '' })
     } catch (err) {
       showMsg('error', err.message)
@@ -122,151 +105,156 @@ const Settings = () => {
     }
   }
 
-  const requestReset = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch('/api/user/reset-password-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email })
-      })
-      const data = await res.json()
-      if (!data.success) throw new Error(data.error)
-      setResetStep(1)
-      showMsg('success', 'OTP dikirim ke email.')
-    } catch (err) {
-      showMsg('error', err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // --- COMPACT UI COMPONENTS ---
+  
+  const SectionTitle = ({ icon: Icon, title }) => (
+    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-blue-900/30 pb-2">
+      <Icon size={14} className="text-blue-500" /> {title}
+    </h3>
+  )
 
-  const confirmReset = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    try {
-      const res = await fetch('/api/user/reset-password-confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: user.email, code: resetOtp, newPassword: resetNewPass })
-      })
-      const data = await res.json()
-      if (!data.success) throw new Error(data.error)
-      setResetStep(0)
-      setResetOtp('')
-      setResetNewPass('')
-      showMsg('success', 'Password berhasil direset!')
-    } catch (err) {
-      showMsg('error', err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const InputField = ({ label, value, onChange, type = "text", placeholder }) => (
+    <div className="space-y-1">
+      <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">{label}</label>
+      <input 
+        type={type} 
+        value={value} 
+        onChange={onChange} 
+        className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-lg py-2 px-3 text-sm text-white focus:outline-none focus:border-blue-500 transition-all placeholder-slate-700" 
+        placeholder={placeholder}
+      />
+    </div>
+  )
 
   if (loading) return <Loader />
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+    <div className="max-w-6xl mx-auto pb-20 animate-in fade-in slide-in-from-bottom-2 duration-500">
       
-      <div className="flex items-center gap-3 mb-6">
-        <h1 className="text-3xl font-bold text-white">Pengaturan Akun</h1>
-      </div>
-
+      {/* Toast Notification */}
       {msg.text && (
-        <div className={`fixed top-6 right-6 z-[100] px-6 py-4 rounded-xl shadow-2xl border ${msg.type === 'error' ? 'bg-[#1a1d24] border-red-500 text-red-400' : 'bg-[#1a1d24] border-green-500 text-green-400'}`}>
-          <span className="font-bold">{msg.text}</span>
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-full shadow-2xl border text-xs font-bold flex items-center gap-2 ${msg.type === 'error' ? 'bg-red-900/90 border-red-500 text-white' : 'bg-green-900/90 border-green-500 text-white'}`}>
+          {msg.type === 'error' ? <ShieldAlert size={14}/> : <User size={14}/>} {msg.text}
         </div>
       )}
 
-      {/* 1. INFORMASI AKUN (BARU) */}
-      <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6">
-        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Monitor className="text-cyan-500"/> Sesi & Perangkat</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-black/30 p-4 rounded-xl border border-white/5">
-            <div className="flex items-center gap-2 mb-2 text-slate-400 text-sm"><Globe size={14}/> IP Address Anda</div>
-            <div className="text-white font-mono text-lg">{ipAddress}</div>
-          </div>
-          <div className="bg-black/30 p-4 rounded-xl border border-white/5">
-             <div className="flex items-center gap-2 mb-2 text-slate-400 text-sm"><Monitor size={14}/> Perangkat Saat Ini</div>
-             <div className="text-white font-medium">{deviceInfo}</div>
-          </div>
-          <div className="bg-black/30 p-4 rounded-xl border border-white/5">
-             <div className="flex items-center gap-2 mb-2 text-slate-400 text-sm"><Calendar size={14}/> Bergabung Sejak</div>
-             <div className="text-white font-medium">{user.created_at ? new Date(user.created_at).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Unknown'}</div>
-          </div>
-          <div className="bg-black/30 p-4 rounded-xl border border-white/5">
-             <div className="flex items-center gap-2 mb-2 text-slate-400 text-sm"><Hash size={14}/> User ID</div>
-             <div className="text-white font-mono text-xs break-all">{user.id}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. PROFILE & AVATAR */}
-      <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6">
-        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><User className="text-blue-500"/> Profil Saya</h2>
-        <form onSubmit={updateProfile} className="space-y-6">
-          <div onClick={() => fileInputRef.current && fileInputRef.current.click()} className="border-2 border-dashed border-blue-900/40 rounded-xl p-6 flex flex-col items-center justify-center gap-4 cursor-pointer hover:bg-blue-900/10 transition-colors">
-            <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileChange} />
-            <div className="relative">
-              {previewImg ? <img src={previewImg} alt="Preview" className="w-24 h-24 rounded-full object-cover border-4 border-blue-600 shadow-xl" /> : <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-3xl">{user.name?.charAt(0).toUpperCase()}</div>}
-              <div className="absolute bottom-0 right-0 bg-white text-blue-600 p-1.5 rounded-full shadow-lg"><Upload size={14}/></div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* LEFT COLUMN: PROFILE CARD (Sticky on Desktop) */}
+        <div className="lg:col-span-4 space-y-6">
+          <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6 text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-20 bg-gradient-to-b from-blue-600/20 to-transparent"></div>
+            
+            <div className="relative inline-block mb-4 group cursor-pointer" onClick={() => fileInputRef.current.click()}>
+              <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleFileChange} />
+              {previewImg ? (
+                <img src={previewImg} alt="Profile" className="w-24 h-24 rounded-full object-cover border-4 border-[#111318] shadow-xl group-hover:opacity-80 transition-opacity" />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-4xl border-4 border-[#111318] shadow-xl">
+                  {user.name?.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="absolute bottom-0 right-0 bg-white text-black p-1.5 rounded-full shadow-lg border-2 border-[#111318]"><Edit3 size={12}/></div>
             </div>
-            <p className="text-slate-400 text-sm">Klik atau Drag & Drop foto di sini (Max 2MB)</p>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-400">Nama Lengkap</label>
-            <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl p-3 text-white" />
-          </div>
-          <button type="submit" className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">Simpan Profil</button>
-        </form>
-      </div>
 
-      {/* 3. API KEY */}
-      <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6">
-        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Key className="text-yellow-500"/> API Key</h2>
-        <div className="bg-black/40 border border-blue-900/20 p-4 rounded-xl flex items-center justify-between gap-4 group">
-          <code className="text-blue-300 font-mono text-sm break-all">{user.api_key}</code>
-          <button onClick={() => { navigator.clipboard.writeText(user.api_key); showMsg('success', 'Tersalin!') }} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white"><Copy size={20}/></button>
-        </div>
-      </div>
+            <h1 className="text-xl font-bold text-white truncate">{user.name}</h1>
+            <p className="text-xs text-slate-500 mb-4 truncate">{user.email}</p>
+            <p className="text-xs text-slate-400 italic mb-6 px-4 line-clamp-2">"{newBio || 'Belum ada bio...'}"</p>
 
-      {/* 4. PASSWORD */}
-      <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-6">
-        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Lock className="text-green-500"/> Keamanan Akun</h2>
-        <form onSubmit={changePassword} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <input type="password" placeholder="Password Lama" value={passData.old} onChange={(e) => setPassData({...passData, old: e.target.value})} className="bg-[#0b0c10] border border-blue-900/30 rounded-xl p-3 text-white" />
-             <input type="password" placeholder="Password Baru" value={passData.new} onChange={(e) => setPassData({...passData, new: e.target.value})} className="bg-[#0b0c10] border border-blue-900/30 rounded-xl p-3 text-white" />
+            <div className="grid grid-cols-2 gap-3 text-xs border-t border-blue-900/30 pt-4">
+              <div className="bg-black/20 p-2 rounded-lg">
+                <div className="text-slate-500 mb-1 flex items-center justify-center gap-1"><Calendar size={10}/> Bergabung</div>
+                <div className="text-white font-medium">{new Date(user.created_at).toLocaleDateString('id-ID', {month:'short', year:'numeric'})}</div>
+              </div>
+              <div className="bg-black/20 p-2 rounded-lg">
+                <div className="text-slate-500 mb-1 flex items-center justify-center gap-1"><Globe size={10}/> IP Anda</div>
+                <div className="text-white font-medium font-mono">{ipAddress}</div>
+              </div>
+            </div>
           </div>
-          <button type="submit" className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold">Ubah Password</button>
-        </form>
 
-        {/* FORGOT PASSWORD */}
-        <div className="flex justify-end mt-2">
-           <button type="button" onClick={() => setResetStep(resetStep === 0 ? 1 : 0) || requestReset()} className="text-sm text-red-400 hover:underline">Lupa password lama?</button>
+          {/* Device Info Mini */}
+          <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-4 flex items-center gap-3">
+            <div className="p-2 bg-blue-900/20 rounded-lg text-blue-400"><Monitor size={18}/></div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs text-slate-500">Device Terdeteksi</div>
+              <div className="text-sm font-medium text-white truncate">{deviceInfo}</div>
+            </div>
+          </div>
         </div>
 
-        {resetStep === 1 && (
-          <div className="mt-4 pt-4 border-t border-blue-900/20 animate-in fade-in">
-            <h3 className="font-bold text-red-400 mb-4 flex items-center gap-2"><ShieldAlert size={18}/> Reset Password via OTP</h3>
-            <form onSubmit={confirmReset} className="space-y-4">
-              <input type="text" value={resetOtp} onChange={(e) => setResetOtp(e.target.value)} className="w-full bg-[#0b0c10] border border-red-900/30 rounded-xl p-3 text-white text-center tracking-widest font-bold" placeholder="0000" />
-              <input type="password" placeholder="Password Baru" value={resetNewPass} onChange={(e) => setResetNewPass(e.target.value)} className="w-full bg-[#0b0c10] border border-red-900/30 rounded-xl p-3 text-white" />
-              <button type="submit" className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold">Reset Sekarang</button>
+        {/* RIGHT COLUMN: SETTINGS FORM */}
+        <div className="lg:col-span-8 space-y-6">
+          
+          {/* 1. GENERAL INFO */}
+          <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-5">
+            <SectionTitle icon={User} title="Informasi Dasar" />
+            <form onSubmit={updateProfile} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <InputField label="Nama Lengkap" value={newName} onChange={e => setNewName(e.target.value)} />
+                <InputField label="Nomor Telepon" value={newPhone} onChange={e => setNewPhone(e.target.value)} placeholder="+62..." type="tel" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-slate-500 ml-1">Bio Singkat</label>
+                <textarea 
+                  value={newBio} 
+                  onChange={e => setNewBio(e.target.value)} 
+                  className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-lg py-2 px-3 text-sm text-white focus:outline-none focus:border-blue-500 h-20 resize-none"
+                  placeholder="Ceritakan sedikit tentang Anda..."
+                />
+              </div>
+              <div className="flex justify-end">
+                <button type="submit" className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-colors">
+                  <Save size={14} /> Simpan Perubahan
+                </button>
+              </div>
             </form>
           </div>
-        )}
-      </div>
 
-      {/* 5. DANGER ZONE (UI ONLY) */}
-      <div className="border border-red-900/30 rounded-2xl p-6 bg-red-900/5">
-        <h2 className="text-xl font-bold text-red-500 mb-4 flex items-center gap-2"><Trash2 size={20}/> Zona Bahaya</h2>
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-slate-400 text-sm">Menghapus akun akan menghilangkan semua data subdomain Anda secara permanen. Tindakan ini tidak dapat dibatalkan.</p>
-          <button disabled className="px-6 py-2 bg-red-900/20 border border-red-900/50 text-red-500 rounded-lg font-bold cursor-not-allowed opacity-70">Hapus Akun</button>
+          {/* 2. API KEY & SECURITY */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* API KEY */}
+            <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-5 flex flex-col">
+              <SectionTitle icon={Key} title="API Access" />
+              <div className="flex-1 flex flex-col justify-center">
+                <div className="relative group">
+                  <input readOnly value={user.api_key} className="w-full bg-black/40 border border-blue-900/30 rounded-lg py-3 px-3 text-xs text-blue-300 font-mono text-center tracking-wider focus:outline-none cursor-text" />
+                  <button 
+                    onClick={() => { navigator.clipboard.writeText(user.api_key); showMsg('success', 'API Key Disalin') }}
+                    className="absolute top-1/2 -translate-y-1/2 right-2 p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors"
+                  >
+                    <Copy size={14}/>
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-500 text-center mt-2">Rahasiakan key ini. Digunakan untuk akses API.</p>
+              </div>
+            </div>
+
+            {/* CHANGE PASSWORD */}
+            <div className="bg-[#111318] border border-blue-900/30 rounded-2xl p-5">
+              <SectionTitle icon={Lock} title="Ganti Password" />
+              <form onSubmit={changePassword} className="space-y-3">
+                <InputField type="password" label="Password Lama" value={passData.old} onChange={e => setPassData({...passData, old: e.target.value})} />
+                <InputField type="password" label="Password Baru" value={passData.new} onChange={e => setPassData({...passData, new: e.target.value})} />
+                <button type="submit" className="w-full py-2 bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-bold rounded-lg border border-white/10 transition-colors">Update Password</button>
+              </form>
+            </div>
+          </div>
+
+          {/* 3. DANGER ZONE */}
+          <div className="border border-red-900/30 rounded-2xl p-5 bg-red-900/5 flex items-center justify-between gap-4">
+            <div>
+              <h4 className="text-red-500 font-bold text-sm flex items-center gap-2"><Trash2 size={16}/> Hapus Akun</h4>
+              <p className="text-[10px] text-slate-500 mt-1">Tindakan ini permanen dan tidak dapat dibatalkan.</p>
+            </div>
+            <button className="px-4 py-2 bg-red-900/20 hover:bg-red-900/30 border border-red-900/50 text-red-500 text-xs font-bold rounded-lg transition-colors">
+              Hapus Permanen
+            </button>
+          </div>
+
         </div>
       </div>
-
     </div>
   )
 }
