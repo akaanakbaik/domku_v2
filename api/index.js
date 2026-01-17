@@ -25,8 +25,8 @@ const limiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, 
-  max: 10, 
-  message: { success: false, error: "Terlalu banyak percobaan login/daftar. Coba lagi nanti." }
+  max: 20, 
+  message: { success: false, error: "Terlalu banyak percobaan login/daftar. Tunggu 1 jam." }
 })
 
 app.use(helmet())
@@ -53,7 +53,9 @@ const BANNED_SUBDOMAINS = [
   'dev', 'root', 'ftp', 'pop', 'imap', 'status', 'api', 'app', 'dashboard', 'auth', 'login'
 ]
 
-const SUBDOMAIN_REGEX = /^[a-z0-9]+$/
+// REGEX BARU: Mengizinkan huruf, angka, titik, dan strip. 
+// Tidak boleh diawali atau diakhiri dengan titik/strip.
+const SUBDOMAIN_REGEX = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/
 
 const sendEmail = async (to, subject, title, message, buttonText, buttonLink) => {
   const htmlContent = `
@@ -94,8 +96,8 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
 app.get('/api', (req, res) => {
   res.json({ 
     status: 'Secure Online', 
-    version: '4.0.0',
-    features: ['Anti-DDoS', 'Rate Limit', 'Cloudflare Check', 'Strict Auth'] 
+    version: '4.1.0',
+    features: ['Anti-DDoS', 'Rate Limit', 'Cloudflare Check', 'Strict Auth', 'Multi-level Subdomain'] 
   })
 })
 
@@ -295,7 +297,8 @@ app.post('/api/subdomain', limiter, async (req, res) => {
 
     if (!subdomain || !recordType || !target) return res.status(400).json({ error: "Data tidak lengkap" })
     
-    if (!SUBDOMAIN_REGEX.test(subdomain)) return res.status(400).json({ error: "Nama hanya boleh huruf dan angka" })
+    // VALIDASI BARU: Membolehkan titik dan strip
+    if (!SUBDOMAIN_REGEX.test(subdomain)) return res.status(400).json({ error: "Nama hanya boleh huruf, angka, titik (.), dan strip (-)" })
     if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ error: "Nama subdomain ini dilarang" })
     if (subdomain.length < 3 || subdomain.length > 63) return res.status(400).json({ error: "Panjang nama harus 3-63 karakter" })
 
@@ -317,7 +320,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     if (!cfData.success) throw new Error(cfData.errors[0]?.message || 'Cloudflare API Error')
 
     await supabase.from('subdomains').insert({ user_id: user.id, name: `${subdomain}.domku.my.id`, target, type: recordType, cf_id: cfData.result.id })
-    res.json({ success: true, data: cfData.result, meta: { geo: 'ID', protected: true } })
+    res.json({ success: true, data: cfData.result })
   } catch (error) {
     res.status(500).json({ success: false, error: error.message })
   }
