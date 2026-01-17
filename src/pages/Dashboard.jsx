@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useOutletContext, useNavigate } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { Globe, Trash2, Copy, AlertCircle, Check, Plus, Search, Download, QrCode, MapPin } from 'lucide-react'
 import Loader from '../components/Loader'
@@ -100,7 +100,21 @@ const Dashboard = () => {
         
         <form onSubmit={handleCreate} className="space-y-6 relative z-10">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            <div className="md:col-span-5 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Subdomain</label><div className="relative group"><input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '') })} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 px-4 text-white focus:border-blue-500 placeholder-slate-700 transition-all" placeholder="project" /><div className="absolute right-4 top-3.5 text-xs text-slate-500 font-mono pointer-events-none group-focus-within:text-blue-400">.domku.my.id</div></div></div>
+            <div className="md:col-span-5 space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase">Subdomain</label>
+                <div className="relative group">
+                    {/* INPUT UPDATED: Mengizinkan titik dan strip */}
+                    <input 
+                        type="text" 
+                        required 
+                        value={formData.name} 
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, '') })} 
+                        className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 px-4 text-white focus:border-blue-500 placeholder-slate-700 transition-all" 
+                        placeholder="project.dev" 
+                    />
+                    <div className="absolute right-4 top-3.5 text-xs text-slate-500 font-mono pointer-events-none group-focus-within:text-blue-400">.domku.my.id</div>
+                </div>
+            </div>
             <div className="md:col-span-2 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Type</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 px-4 text-white cursor-pointer"><option value="A">A</option><option value="CNAME">CNAME</option><option value="AAAA">AAAA</option><option value="TXT">TXT</option></select></div>
             <div className="md:col-span-5 space-y-2"><label className="text-xs font-bold text-slate-500 uppercase">Target</label><input type="text" required value={formData.target} onChange={(e) => setFormData({ ...formData, target: e.target.value })} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 px-4 text-white focus:border-blue-500 font-mono placeholder-slate-700" placeholder="1.1.1.1" /></div>
           </div>
