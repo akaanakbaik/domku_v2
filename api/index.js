@@ -24,15 +24,16 @@ const upload = multer({
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, 
-  max: 100, 
+  max: 300, // Diperlonggar sedikit untuk testing
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: "Rate limit exceeded. Try again later." }
 })
 
+// Auth limiter diperlonggar agar tidak mudah ke-lock saat testing
 const authLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, 
-  max: 20, 
+  max: 50, 
   message: { success: false, error: "Too many login attempts. Wait 1 hour." }
 })
 
@@ -78,42 +79,47 @@ const logActivity = async (userId, action, details, req) => {
       ip_address: ip
     })
   } catch (e) {
-    console.error("Log failed:", e)
+    console.error("Log failed:", e.message)
   }
 }
 
 const sendEmail = async (to, subject, title, message, buttonText, buttonLink) => {
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: sans-serif; background: #f1f5f9; padding: 20px; }
-        .box { max-width: 500px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .btn { display: inline-block; background: #2563eb; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; }
-        .otp { font-size: 32px; letter-spacing: 5px; font-weight: bold; color: #1e40af; text-align: center; margin: 20px 0; background: #eff6ff; padding: 15px; border-radius: 8px; }
-      </style>
-    </head>
-    <body>
-      <div class="box">
-        <h2 style="color:#0f172a; text-align:center;">${title}</h2>
-        <p style="color:#334155; line-height:1.6;">${message}</p>
-        ${buttonText ? `<div style="text-align:center"><a href="${buttonLink}" class="btn">${buttonText}</a></div>` : ''}
-        ${!buttonText && buttonLink ? `<div class="otp">${buttonLink}</div>` : ''}
-        <hr style="border:0; border-top:1px solid #e2e8f0; margin-top:30px;">
-        <p style="text-align:center; font-size:12px; color:#94a3b8;">&copy; 2026 Domku Manager</p>
-      </div>
-    </body>
-    </html>
-  `
-  await transporter.sendMail({ from: `"Domku Security" <${process.env.NODEMAILER_EMAIL}>`, to, subject, html: htmlContent })
+  try {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: sans-serif; background: #f1f5f9; padding: 20px; }
+          .box { max-width: 500px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+          .btn { display: inline-block; background: #2563eb; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-top: 20px; font-weight: bold; }
+          .otp { font-size: 32px; letter-spacing: 5px; font-weight: bold; color: #1e40af; text-align: center; margin: 20px 0; background: #eff6ff; padding: 15px; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <h2 style="color:#0f172a; text-align:center;">${title}</h2>
+          <p style="color:#334155; line-height:1.6;">${message}</p>
+          ${buttonText ? `<div style="text-align:center"><a href="${buttonLink}" class="btn">${buttonText}</a></div>` : ''}
+          ${!buttonText && buttonLink ? `<div class="otp">${buttonLink}</div>` : ''}
+          <hr style="border:0; border-top:1px solid #e2e8f0; margin-top:30px;">
+          <p style="text-align:center; font-size:12px; color:#94a3b8;">&copy; 2026 Domku Manager</p>
+        </div>
+      </body>
+      </html>
+    `
+    await transporter.sendMail({ from: `"Domku Security" <${process.env.NODEMAILER_EMAIL}>`, to, subject, html: htmlContent })
+  } catch (err) {
+    console.error("Email Error:", err.message)
+    // Jangan throw error agar proses tidak berhenti total jika email gagal
+  }
 }
 
 // --- ENDPOINTS ---
 
-// 1. Status Checker (Untuk Sidebar Indicator)
+// 1. Status Checker
 app.get('/api/status', (req, res) => {
-  res.json({ status: 'online', timestamp: new Date(), version: '4.5.0' })
+  res.json({ status: 'online', timestamp: new Date(), version: '4.5.1' })
 })
 
 app.get('/api', (req, res) => res.json({ status: 'Active', endpoints: ['/auth', '/subdomain', '/user'] }))
@@ -128,19 +134,32 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 
     if (!name || !email || !password) return res.status(400).json({ success: false, error: "Data tidak lengkap" })
     
-    const { data: { users } } = await supabase.auth.admin.listUsers()
-    if (users.find(u => u.email === email)) return res.status(400).json({ success: false, error: "Email terdaftar" })
+    // SAFE CHECK: Supabase List Users
+    const { data: userList, error: listError } = await supabase.auth.admin.listUsers()
+    
+    if (listError) {
+      console.error("Supabase Admin Error:", listError)
+      return res.status(500).json({ success: false, error: "Database Connection Error" })
+    }
+
+    if (userList?.users?.find(u => u.email === email)) {
+      return res.status(400).json({ success: false, error: "Email sudah terdaftar" })
+    }
 
     const salt = await bcrypt.genSalt(12) 
     const passwordHash = await bcrypt.hash(password, salt)
     const token = crypto.randomBytes(32).toString('hex')
 
-    await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash, token }, { onConflict: 'email' })
+    const { error: dbError } = await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash, token }, { onConflict: 'email' })
+    
+    if (dbError) throw new Error(dbError.message)
+
     await sendEmail(email, 'Verifikasi Akun', `Halo ${name}`, 'Verifikasi email Anda untuk melanjutkan.', 'Verifikasi', `${origin}/verify-email?token=${token}`)
     
     res.json({ success: true, message: 'Cek email Anda.' })
   } catch (error) {
-    res.status(500).json({ success: false, error: "Server Error" }) 
+    console.error("Register Error:", error)
+    res.status(500).json({ success: false, error: "Server Error: " + error.message }) 
   }
 })
 
@@ -149,36 +168,37 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
   try {
     const { token } = req.body
     const { data: pending } = await supabase.from('pending_registrations').select('*').eq('token', token).single()
-    if (!pending) return res.status(400).json({ success: false, error: "Token invalid" })
+    if (!pending) return res.status(400).json({ success: false, error: "Token invalid atau expired" })
 
     const apiKey = crypto.randomBytes(24).toString('hex') 
     let userId
 
-    const { data: { users } } = await supabase.auth.admin.listUsers()
-    const existing = users.find(u => u.email === pending.email)
+    const { data: userList } = await supabase.auth.admin.listUsers()
+    const existing = userList?.users?.find(u => u.email === pending.email)
 
     if (existing) {
       userId = existing.id
       await supabase.auth.admin.updateUserById(userId, { user_metadata: { name: pending.name, api_key: apiKey }, email_confirm: true })
     } else {
-      const { data: authUser } = await supabase.auth.admin.createUser({
+      const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
         email: pending.email,
         password: "SECURE_" + crypto.randomBytes(16).toString('hex'),
         user_metadata: { name: pending.name, api_key: apiKey },
         email_confirm: true
       })
+      if (createError) throw new Error(createError.message)
       userId = authUser.user.id
     }
 
     await supabase.from('users').upsert({ id: userId, email: pending.email, name: pending.name, api_key: apiKey, password_hash: pending.password_hash })
     await supabase.from('pending_registrations').delete().eq('id', pending.id)
     
-    // Log Activity
     await logActivity(userId, 'REGISTER', 'User registered and verified', req)
 
     res.json({ success: true, message: 'Akun Aktif.' })
   } catch (error) {
-    res.status(500).json({ success: false, error: "Verifikasi gagal" })
+    console.error("Verify Error:", error)
+    res.status(500).json({ success: false, error: "Verifikasi gagal: " + error.message })
   }
 })
 
@@ -235,7 +255,10 @@ app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) =
     if (file) {
       if (!file.mimetype.startsWith('image/')) return res.status(400).json({success: false, error: "Hanya gambar"})
       const fileName = `${crypto.randomUUID()}_${file.originalname.replace(/[^a-zA-Z0-9.]/g, '')}`
-      await supabase.storage.from('avatars').upload(fileName, file.buffer, { contentType: file.mimetype, upsert: true })
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file.buffer, { contentType: file.mimetype, upsert: true })
+      
+      if (uploadError) throw new Error("Upload Failed: " + uploadError.message)
+      
       const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName)
       avatarUrl = publicUrl
     }
@@ -243,7 +266,9 @@ app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) =
     const updateData = { name, bio, phone }
     if (avatarUrl) updateData.avatar_url = avatarUrl
 
-    await supabase.from('users').update(updateData).eq('email', email)
+    const { error: updateError } = await supabase.from('users').update(updateData).eq('email', email)
+    if (updateError) throw new Error(updateError.message)
+
     const { data: updatedUser } = await supabase.from('users').select('*').eq('email', email).single()
     
     await logActivity(updatedUser.id, 'UPDATE_PROFILE', 'User updated profile details', req)
@@ -307,15 +332,13 @@ app.post('/api/user/reset-password-confirm', async (req, res) => {
     await supabase.from('users').update({ password_hash: newHash }).eq('email', email)
     await supabase.from('verification_codes').delete().eq('email', email)
     
-    // Log activity tanpa user ID (karena belum login, pakai email lookup nanti jika perlu)
-    
     res.json({ success: true, message: 'Password direset' })
   } catch (error) {
     res.status(500).json({ success: false, error: "Gagal" })
   }
 })
 
-// 10. Create Subdomain
+// 10. Create Subdomain (SAFE CHECK ADDED)
 app.post('/api/subdomain', limiter, async (req, res) => {
   const apiKey = req.headers['x-api-key']
   if(!apiKey) return res.status(401).json({ success: false, error: "Unauthorized" })
@@ -337,21 +360,31 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const { count } = await supabase.from('subdomains').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
     if (count >= 30) return res.status(400).json({ error: "Limit Max 30" })
 
-    // Cloudflare Check
+    // CLOUDFLARE CHECK - SAFE
     const checkCf = await fetch(`https://api.cloudflare.com/client/v4/zones/${process.env.CLOUDFLARE_ZONE_ID}/dns_records?name=${subdomain}.domku.my.id`, {
         headers: { 'Content-Type': 'application/json', 'X-Auth-Email': process.env.CLOUDFLARE_EMAIL, 'X-Auth-Key': process.env.CLOUDFLARE_API_KEY }
     })
+    
     const checkData = await checkCf.json()
-    if (checkData.result.length > 0) return res.status(400).json({ error: "Subdomain sudah dipakai" })
+    
+    // SAFE GUARD: Pastikan checkData.result ada sebelum akses .length
+    if (checkData.result && checkData.result.length > 0) {
+      return res.status(400).json({ error: "Subdomain sudah dipakai orang lain" })
+    }
 
-    // Cloudflare Create
+    // CLOUDFLARE CREATE
     const cfResponse = await fetch(`https://api.cloudflare.com/client/v4/zones/${process.env.CLOUDFLARE_ZONE_ID}/dns_records`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Email': process.env.CLOUDFLARE_EMAIL, 'X-Auth-Key': process.env.CLOUDFLARE_API_KEY },
       body: JSON.stringify({ type: recordType, name: subdomain, content: target, ttl: 1, proxied: true })
     })
     const cfData = await cfResponse.json()
-    if (!cfData.success) throw new Error(cfData.errors[0]?.message || 'CF Error')
+    
+    if (!cfData.success) {
+      // Ambil error message dengan aman
+      const errMsg = cfData.errors?.[0]?.message || 'Cloudflare API Error Unknown'
+      throw new Error(errMsg)
+    }
 
     await supabase.from('subdomains').insert({ user_id: user.id, name: `${subdomain}.domku.my.id`, target, type: recordType, cf_id: cfData.result.id })
     
@@ -359,6 +392,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
 
     res.json({ success: true, data: cfData.result })
   } catch (error) {
+    console.error("Subdomain Error:", error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
