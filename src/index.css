@@ -3,118 +3,56 @@
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
   color-scheme: dark;
 }
 
 body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
   background-color: #0b0c10;
   color: #e2e8f0;
+  overflow-x: hidden;
 }
 
-/* Custom Scrollbar */
+/* --- CUSTOM SCROLLBAR (The Magic) --- */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: #0b0c10; 
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #1e293b; 
+  background: #1f2937; 
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155; 
+  background: #3b82f6; 
 }
 
-/* LOADER ANIMATION (Original) */
-.loader-wrapper {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 9999;
-  background-color: #0b0c10;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
+/* --- UTILITIES --- */
+.glass {
+  background: rgba(17, 19, 24, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(59, 130, 246, 0.1);
 }
 
-.loader {
-  width: 64px;
-  height: 64px;
-  border: 3px solid #1e293b;
-  border-radius: 50%;
-  border-top-color: #3b82f6;
-  animation: spin 1s linear infinite;
-  margin-bottom: 1rem;
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-@keyframes spin {
-  100% { transform: rotate(360deg); }
+/* --- ANIMATIONS --- */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.1); }
+  50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
 }
 
-.letter-wrapper {
-  display: flex;
-  gap: 2px;
-}
-
-.loader-letter {
-  color: #94a3b8;
-  font-family: monospace;
-  font-size: 1.2rem;
-  font-weight: bold;
-  animation: flash 1.4s linear infinite;
-}
-
-.loader-letter:nth-child(1) { animation-delay: 0.1s; }
-.loader-letter:nth-child(2) { animation-delay: 0.2s; }
-.loader-letter:nth-child(3) { animation-delay: 0.3s; }
-.loader-letter:nth-child(4) { animation-delay: 0.4s; }
-.loader-letter:nth-child(5) { animation-delay: 0.5s; }
-.loader-letter:nth-child(6) { animation-delay: 0.6s; }
-.loader-letter:nth-child(7) { animation-delay: 0.7s; }
-.loader-letter:nth-child(8) { animation-delay: 0.8s; }
-.loader-letter:nth-child(9) { animation-delay: 0.9s; }
-.loader-letter:nth-child(10) { animation-delay: 1.0s; }
-
-@keyframes flash {
-  0%, 100% { color: #94a3b8; text-shadow: none; }
-  50% { color: #3b82f6; text-shadow: 0 0 5px #3b82f6; }
-}
-
-/* UTILITIES BARU (Glassmorphism & Animasi) */
-@layer utilities {
-  .glass {
-    background-color: rgba(17, 19, 24, 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(30, 58, 138, 0.3);
-  }
-  
-  .glass-hover {
-    transition: all 0.3s ease;
-  }
-  .glass-hover:hover {
-    background-color: rgba(26, 29, 36, 0.8);
-    border-color: rgba(59, 130, 246, 0.4);
-    transform: translateY(-2px);
-  }
-  
-  .animate-enter {
-    animation: enter 0.5s ease-out forwards;
-  }
-  
-  @keyframes enter {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+.animate-glow {
+  animation: pulse-glow 3s infinite;
 }
