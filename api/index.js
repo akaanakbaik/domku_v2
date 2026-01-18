@@ -43,7 +43,6 @@ app.use(limiter)
 
 // --- KONEKSI ---
 
-// Validasi Env Variable
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.error("FATAL: Supabase URL or Key Missing in ENV")
 }
@@ -72,6 +71,26 @@ const BANNED_SUBDOMAINS = [
 const SUBDOMAIN_REGEX = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/
 
 // --- HELPER FUNCTIONS ---
+
+// Helper untuk Cek IP Private (LAN)
+const isPrivateIP = (ip) => {
+   const parts = ip.split('.');
+   if (parts.length !== 4) return false; // Bukan IPv4 standar
+   
+   // 10.0.0.0 - 10.255.255.255
+   if (parts[0] === '10') return true;
+   
+   // 172.16.0.0 - 172.31.255.255
+   if (parts[0] === '172' && parts[1] >= 16 && parts[1] <= 31) return true;
+   
+   // 192.168.0.0 - 192.168.255.255
+   if (parts[0] === '192' && parts[1] === '168') return true;
+   
+   // 127.0.0.0 - 127.255.255.255 (Loopback)
+   if (parts[0] === '127') return true;
+   
+   return false;
+}
 
 const logActivity = async (userId, action, details, req) => {
   try {
@@ -103,24 +122,18 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
 
 // --- ROUTES ---
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.0.0 (Token Auth)' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.1.0' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
-// 1. CREATE SUBDOMAIN (Cloudflare API Token Version)
+// 1. CREATE SUBDOMAIN
 app.post('/api/subdomain', limiter, async (req, res) => {
   try {
-    // 1. Validasi API Key
     const apiKey = req.headers['x-api-key']
     if (!apiKey) return res.status(401).json({ success: false, error: "API Key required" })
 
     const { data: user, error: userError } = await supabase.from('users').select('id, email').eq('api_key', apiKey).single()
-    
-    if (userError || !user) {
-        console.error("Auth DB Error:", userError)
-        return res.status(403).json({ success: false, error: "Invalid API Key or Database Error" })
-    }
+    if (userError || !user) return res.status(403).json({ success: false, error: "Invalid API Key" })
 
-    // 2. Validasi Input
     const rawSubdomain = req.body.subdomain || ''
     const rawTarget = req.body.target || ''
     const recordType = req.body.recordType || 'A'
@@ -133,12 +146,17 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Nama subdomain dilarang" })
     if (subdomain.length < 3 || subdomain.length > 63) return res.status(400).json({ success: false, error: "Panjang nama 3-63 karakter" })
 
-    // 3. Limit Check
+    // Validasi IP Private
+    if (recordType === 'A' && isPrivateIP(target)) {
+        return res.status(400).json({ 
+            success: false, 
+            error: "IP Private (Lokal) tidak diizinkan. Gunakan Public IP." 
+        })
+    }
+
     const { count } = await supabase.from('subdomains').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
     if (count >= 30) return res.status(400).json({ success: false, error: "Limit Max 30 Subdomain" })
 
-    // 4. Cloudflare Check (BEARER TOKEN MODE)
-    // Menggunakan API Token (3zOr...), wajib Header Authorization: Bearer
     const cfHeaders = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.CLOUDFLARE_API_KEY}`
@@ -152,20 +170,10 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const checkCf = await fetch(checkUrl, { headers: cfHeaders })
     const checkData = await checkCf.json()
 
-    // Defensive check
-    if (!checkData.success) {
-       console.error("CF Check Error:", JSON.stringify(checkData.errors))
-       // Jika errornya "Invalid token", berarti token salah
-       if(checkData.errors?.[0]?.code === 6003) {
-           return res.status(500).json({success: false, error: "Server Configuration Error (Invalid CF Token)"})
-       }
-    }
-
     if (checkData.result && checkData.result.length > 0) {
       return res.status(400).json({ success: false, error: "Subdomain sudah digunakan" })
     }
 
-    // 5. Cloudflare Create
     const cfResponse = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`, {
       method: 'POST',
       headers: cfHeaders,
@@ -175,11 +183,17 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const cfData = await cfResponse.json()
     
     if (!cfData.success) {
-      const errMsg = cfData.errors?.[0]?.message || 'Cloudflare Creation Failed'
+      // Menangkap pesan error detail dari Cloudflare
+      const errMsg = cfData.errors?.[0]?.message || JSON.stringify(cfData.errors) || 'Cloudflare Creation Failed'
+      
+      // Jika errornya "Target is a private IP" (Code 1004)
+      if (errMsg.includes("private IP") || errMsg.includes("1004")) {
+          return res.status(400).json({ success: false, error: "Cloudflare menolak IP Lokal/Private. Gunakan IP Public." })
+      }
+      
       throw new Error(errMsg)
     }
 
-    // 6. Simpan ke DB
     await supabase.from('subdomains').insert({ 
         user_id: user.id, 
         name: `${subdomain}.domku.my.id`, 
