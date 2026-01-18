@@ -3,9 +3,13 @@ import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { Globe, Trash2, Copy, AlertCircle, Check, Plus, Search, Download, QrCode, MapPin, Activity, Clock, RefreshCw, XCircle } from 'lucide-react'
 import { DashboardSkeleton } from '../components/Skeleton'
+import Loader from '../components/Loader' // Pastikan import Loader
 
 const Dashboard = () => {
   const context = useOutletContext()
+  // Debugging: Cek apakah user terdeteksi
+  console.log("Dashboard Context:", context)
+  
   const user = context?.user
 
   const [loading, setLoading] = useState(true)
@@ -19,56 +23,79 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('domains')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+  const [errorInfo, setErrorInfo] = useState(null) // State untuk nampilin error fatal
 
-  // Ref untuk Scroll otomatis
   const historyRef = useRef(null)
 
-  // 1. FETCH DATA (Subdomains & Logs)
   const fetchData = async () => {
     try {
       if (!user) return
+      console.log("Fetching data for user:", user.id) // Debug
       setIsRefreshing(true)
+      setErrorInfo(null)
 
-      const { data: subData } = await supabase
+      // 1. Fetch Subdomains
+      const { data: subData, error: subError } = await supabase
         .from('subdomains')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
       
+      if (subError) throw subError
+      console.log("Subdomains Data:", subData) // Debug
       if (subData) setSubdomains(subData)
 
-      const { data: logData } = await supabase
+      // 2. Fetch Logs
+      const { data: logData, error: logError } = await supabase
         .from('activity_logs')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20)
 
+      if (logError) throw logError
+      console.log("Logs Data:", logData) // Debug
       if (logData) setActivities(logData)
 
     } catch (error) {
-      console.error("Fetch Error", error)
+      console.error("Dashboard Fetch Error:", error)
+      setErrorInfo(error.message)
     } finally {
       setLoading(false)
       setIsRefreshing(false)
     }
   }
 
-  // 2. REALTIME LISTENER
   useEffect(() => {
-    fetchData()
-    const subscription = supabase
-      .channel('public:dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'subdomains' }, fetchData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, fetchData)
-      .subscribe()
+    if (user) {
+        fetchData()
+        
+        const subscription = supabase
+        .channel('public:dashboard')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'subdomains' }, (payload) => {
+            console.log("Realtime Subdomain Change:", payload)
+            fetchData()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, (payload) => {
+            console.log("Realtime Log Change:", payload)
+            fetchData()
+        })
+        .subscribe()
 
-    return () => { supabase.removeChannel(subscription) }
+        return () => { supabase.removeChannel(subscription) }
+    }
   }, [user])
 
-  if (!user) return null
+  // FIX: JANGAN return null, tampilkan Loader atau Pesan
+  if (!user) {
+      return (
+        <div className="flex flex-col items-center justify-center py-20">
+            <Loader />
+            <p className="mt-4 text-slate-500 text-sm">Memuat data pengguna...</p>
+        </div>
+      )
+  }
 
-  // 3. CREATE HANDLER (With Auto Scroll)
   const handleCreate = async (e) => {
     e.preventDefault()
     setMsg({ type: 'loading', text: 'Processing...' })
@@ -84,7 +111,6 @@ const Dashboard = () => {
       setMsg({ type: 'success', text: 'Created!' })
       setFormData({ name: '', type: 'A', target: '' })
       
-      // Auto switch to history & scroll
       setActiveTab('history')
       setTimeout(() => {
         historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -95,7 +121,6 @@ const Dashboard = () => {
     }
   }
 
-  // 4. DELETE HANDLER (Sync Cloudflare)
   const handleDelete = async (id, name) => {
     if (!confirm(`Hapus ${name}?`)) return
     setDeletingId(id)
@@ -107,7 +132,7 @@ const Dashboard = () => {
         const data = await res.json()
         if (!data.success) throw new Error(data.error)
         
-        // Optimistic UI Update
+        // Optimistic UI Update handled by Realtime, but double check
         setSubdomains(prev => prev.filter(item => item.id !== id))
         
     } catch (err) {
@@ -123,12 +148,30 @@ const Dashboard = () => {
     setTimeout(() => setCopyStatus(null), 1500)
   }
 
+  const exportData = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(subdomains, null, 2))
+    const downloadAnchorNode = document.createElement('a')
+    downloadAnchorNode.setAttribute("href", dataStr)
+    downloadAnchorNode.setAttribute("download", "domku_backup.json")
+    document.body.appendChild(downloadAnchorNode)
+    downloadAnchorNode.click()
+    downloadAnchorNode.remove()
+  }
+
   const filteredSubdomains = subdomains.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
 
   return (
     <div className="space-y-6 pb-24 relative animate-in fade-in duration-500 max-w-4xl mx-auto">
       
-      {/* QR MODAL */}
+      {/* ERROR DEBUGGING UI */}
+      {errorInfo && (
+          <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl text-red-200 text-sm mb-6">
+              <p className="font-bold mb-1">Gagal Memuat Data:</p>
+              <code className="block bg-black/30 p-2 rounded">{errorInfo}</code>
+              <p className="mt-2 text-xs opacity-70">Saran: Coba Logout dan Login kembali.</p>
+          </div>
+      )}
+
       {showQr && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6" onClick={() => setShowQr(null)}>
             <div className="bg-white p-6 rounded-2xl shadow-2xl text-center animate-in zoom-in duration-300 w-full max-w-[280px]" onClick={e => e.stopPropagation()}>
