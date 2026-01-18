@@ -1,7 +1,7 @@
 {
-  "name": "domku-pro",
+  "name": "domku-v2",
   "private": true,
-  "version": "4.8.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -34,6 +34,6 @@
     "vite": "^5.0.8"
   },
   "engines": {
-    "node": "20.x"
+    "node": "18.x"
   }
 }
