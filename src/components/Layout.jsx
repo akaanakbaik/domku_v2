@@ -3,6 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { Menu, LogIn } from 'lucide-react'
 import Sidebar from './Sidebar'
 import Loader from './Loader'
+import Footer from './Footer' // Import Footer
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -11,21 +12,18 @@ const Layout = () => {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // 1. Dynamic Title Changer
+  // Dynamic Title
   useEffect(() => {
     const path = location.pathname
-    let title = 'Domku - Secure Subdomain Manager'
-    
-    if (path === '/auth') title = 'Masuk / Daftar - Domku'
+    let title = 'Domku - DNS Manager'
+    if (path === '/auth') title = 'Login - Domku'
     if (path === '/subdomain') title = 'Dashboard - Domku'
-    if (path === '/settings') title = 'Pengaturan Akun - Domku'
-    if (path === '/api') title = 'API Documentation - Domku'
-    if (path === '/') title = 'Domku - Free Subdomain Service'
-    
+    if (path === '/settings') title = 'Settings - Domku'
+    if (path === '/api') title = 'API Docs - Domku'
     document.title = title
   }, [location])
 
-  // 2. Session Logic
+  // Session Management
   const refreshSession = useCallback(() => {
     try {
       const local = localStorage.getItem('domku_session')
@@ -53,7 +51,6 @@ const Layout = () => {
       await new Promise(r => setTimeout(r, 400))
       setIsChecking(false)
     }
-
     init()
     window.addEventListener('storage', refreshSession)
     window.addEventListener('session-update', refreshSession)
@@ -63,10 +60,9 @@ const Layout = () => {
     }
   }, [refreshSession])
 
-  // 3. Route Protection
+  // Route Protection
   useEffect(() => {
     if (isChecking) return
-
     const publicRoutes = ['/', '/auth', '/verify-email', '/api']
     const isPublic = publicRoutes.includes(location.pathname)
 
@@ -81,7 +77,7 @@ const Layout = () => {
   if (isChecking) return <Loader />
 
   return (
-    <div className="min-h-screen bg-[#0b0c10] text-slate-200 font-sans selection:bg-blue-500/30 selection:text-white">
+    <div className="min-h-screen bg-[#0b0c10] text-slate-200 font-sans flex flex-col">
       {/* NAVBAR */}
       <header className="fixed top-0 left-0 right-0 h-16 bg-[#0b0c10]/80 backdrop-blur-md border-b border-blue-900/30 flex items-center justify-between px-4 z-40 transition-all">
         <div className="flex items-center gap-2">
@@ -122,15 +118,12 @@ const Layout = () => {
       {/* SIDEBAR & CONTENT */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={user} />
 
-      <main className="pt-24 px-4 pb-10 max-w-7xl mx-auto min-h-screen">
+      <main className="pt-24 px-4 flex-1 w-full max-w-7xl mx-auto">
         <Outlet context={{ user, refreshSession }} />
       </main>
 
-      {/* FOOTER */}
-      <footer className="py-8 text-center text-xs text-slate-600 border-t border-blue-900/10 mt-10">
-        <p className="font-medium text-slate-500">&copy; 2026 Domku Manager</p>
-        <p className="mt-1 opacity-70">made with ❤️ by Aka 🇮🇩</p>
-      </footer>
+      {/* FOOTER - INTEGRATED */}
+      <Footer />
     </div>
   )
 }
