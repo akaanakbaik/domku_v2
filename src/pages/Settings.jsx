@@ -1,22 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { useOutletContext, useNavigate } from 'react-router-dom'
+import { useOutletContext } from 'react-router-dom'
 import { User, Lock, Save, Camera, Mail, Key, ShieldAlert, Loader2, Trash2, AlertTriangle } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
 
 const Settings = () => {
   const { user, refreshSession } = useOutletContext()
-  const navigate = useNavigate()
   const { addToast } = useToast()
   
   const [loading, setLoading] = useState(false)
-  
   const [profile, setProfile] = useState({ name: '', bio: '', phone: '' })
   const [avatarPreview, setAvatarPreview] = useState(null)
   const [avatarFile, setAvatarFile] = useState(null)
   const fileInputRef = useRef(null)
 
   const [pass, setPass] = useState({ old: '', new: '' })
-  
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
@@ -30,7 +27,7 @@ const Settings = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0]
     if (file) {
-      if (file.size > 2 * 1024 * 1024) return addToast('error', 'Maksimal ukuran foto 2MB')
+      if (file.size > 2 * 1024 * 1024) return addToast('warning', 'Ukuran maksimal foto 2MB')
       setAvatarFile(file)
       setAvatarPreview(URL.createObjectURL(file))
     }
@@ -111,6 +108,7 @@ const Settings = () => {
   return (
     <div className="max-w-5xl mx-auto pb-24 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
+      {/* Header Profile */}
       <div className="flex flex-col md:flex-row items-center gap-6 pb-6 border-b border-blue-900/20">
         <div className="relative group">
             <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-4xl font-bold text-white overflow-hidden border-4 border-[#0b0c10] shadow-2xl ring-2 ring-blue-500/50">
@@ -131,6 +129,7 @@ const Settings = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
+              {/* Profile Form */}
               <section className="bg-[#111318] p-6 rounded-2xl border border-blue-900/20">
                   <div className="flex items-center gap-2 mb-6"><User className="text-blue-500" size={20}/> <h2 className="font-bold text-lg text-white">Informasi Profil</h2></div>
                   <form onSubmit={handleProfileUpdate} className="space-y-4">
@@ -143,12 +142,13 @@ const Settings = () => {
                   </form>
               </section>
 
+              {/* Danger Zone */}
               <section className="bg-[#111318] p-6 rounded-2xl border border-blue-900/20">
                    <div className="flex items-center gap-2 mb-6"><ShieldAlert className="text-red-500" size={20}/> <h2 className="font-bold text-lg text-white">Zona Berbahaya</h2></div>
                    <div className="flex items-center justify-between p-4 bg-red-900/10 border border-red-500/20 rounded-xl">
                         <div>
                             <h4 className="text-white font-bold text-sm">Hapus Akun Permanen</h4>
-                            <p className="text-xs text-slate-500 mt-1 max-w-md">Tindakan ini akan menghapus semua subdomain, log, dan data Anda dari server kami dan Cloudflare. Tidak bisa dibatalkan.</p>
+                            <p className="text-xs text-slate-500 mt-1 max-w-md">Menghapus semua data, subdomain, dan log. Tidak bisa dibatalkan.</p>
                         </div>
                         <button onClick={() => setShowDeleteModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg transition-colors">Hapus Akun</button>
                    </div>
@@ -156,15 +156,17 @@ const Settings = () => {
           </div>
 
           <div className="space-y-8">
+              {/* API Access */}
               <section className="bg-[#111318] p-6 rounded-2xl border border-blue-900/20 h-fit">
                   <div className="flex items-center gap-2 mb-6"><Key className="text-yellow-500" size={20}/> <h2 className="font-bold text-lg text-white">API Access</h2></div>
                   <div className="bg-[#0b0c10] p-4 rounded-xl border border-blue-900/30 relative group overflow-hidden">
                       <div className="absolute top-0 right-0 px-2 py-1 bg-yellow-500/20 text-yellow-400 text-[10px] font-bold rounded-bl-lg">MASTER KEY</div>
                       <code className="text-xs text-slate-300 font-mono break-all block mt-2">{user.api_key}</code>
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-3 text-center">Gunakan key ini untuk mengakses endpoint API.</p>
+                  <p className="text-[10px] text-slate-500 mt-3 text-center">Rahasiakan API Key ini.</p>
               </section>
 
+              {/* Change Password */}
               <section className="bg-[#111318] p-6 rounded-2xl border border-blue-900/20 h-fit">
                   <div className="flex items-center gap-2 mb-6"><Lock className="text-slate-400" size={20}/> <h2 className="font-bold text-lg text-white">Ganti Password</h2></div>
                   <form onSubmit={handlePassUpdate} className="space-y-4">
@@ -176,8 +178,9 @@ const Settings = () => {
           </div>
       </div>
 
+      {/* Delete Modal */}
       {showDeleteModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
               <div className="bg-[#16181d] border border-red-500/30 p-6 rounded-2xl max-w-sm w-full shadow-2xl animate-in zoom-in-95">
                   <div className="flex items-center gap-3 text-red-500 mb-4">
                       <div className="p-3 bg-red-500/10 rounded-full"><AlertTriangle size={24}/></div>
