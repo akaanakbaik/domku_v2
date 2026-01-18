@@ -15,14 +15,14 @@ const Footer = () => {
             <span>Made with</span>
             <Heart size={12} className="text-red-500 fill-red-500 animate-pulse" />
             <span>by</span>
-            <a href="https://github.com/akaanakbaik" target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors font-bold">Aka</a>
+            <a href="https://akadev.me" target="_blank" rel="noreferrer" className="text-blue-400 hover:text-blue-300 transition-colors font-bold">Aka</a>
             <span className="mx-1">•</span>
             <span>Indonesia 🇮🇩</span>
         </div>
 
         <div className="flex gap-4">
-            <a href="https://github.com" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Github size={16}/></a>
-            <a href="https://twitter.com" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Twitter size={16}/></a>
+            <a href="https://github.com/akaanakbaik" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Github size={16}/></a>
+            <a href=https://www.instagram.com/kenal.aka" target="_blank" rel="noreferrer" className="text-slate-500 hover:text-white transition-colors"><Instagram size={16}/></a>
         </div>
 
       </div>
