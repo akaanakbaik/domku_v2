@@ -1,6 +1,6 @@
 import React from 'react'
 import { Routes, Route } from 'react-router-dom'
-import { ToastProvider } from './context/ToastContext' // Import Provider
+import { ToastProvider } from './context/ToastContext'
 import Home from './pages/Home'
 import Auth from './pages/Auth'
 import VerifyEmail from './pages/VerifyEmail'
