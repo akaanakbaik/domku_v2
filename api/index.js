@@ -14,13 +14,10 @@ dotenv.config()
 
 const app = express()
 
-// Konfigurasi Upload
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 2 * 1024 * 1024 } 
 })
-
-// --- MIDDLEWARE ---
 
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, 
@@ -41,8 +38,6 @@ app.use(cors({ origin: true, credentials: true }))
 app.use(express.json({ limit: '10kb' })) 
 app.use(limiter)
 
-// --- KONEKSI ---
-
 if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.error("FATAL: Supabase URL or Key Missing in ENV")
 }
@@ -60,8 +55,6 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-// --- KONFIGURASI ---
-
 const BANNED_SUBDOMAINS = [
   'www', 'mail', 'remote', 'blog', 'webmail', 'server', 'ns1', 'ns2', 'smtp', 'secure', 
   'vpn', 'm', 'shop', 'admin', 'panel', 'cpanel', 'whm', 'billing', 'support', 'test', 
@@ -69,8 +62,6 @@ const BANNED_SUBDOMAINS = [
 ]
 
 const SUBDOMAIN_REGEX = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/
-
-// --- HELPER FUNCTIONS ---
 
 const isPrivateIP = (ip) => {
    const parts = ip.split('.');
@@ -110,12 +101,9 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
   }
 }
 
-// --- ROUTES ---
-
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.2.0 (Auto Clean CNAME)' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.3.0 (Proxy Off)' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
-// 1. CREATE SUBDOMAIN
 app.post('/api/subdomain', limiter, async (req, res) => {
   try {
     const apiKey = req.headers['x-api-key']
@@ -130,13 +118,8 @@ app.post('/api/subdomain', limiter, async (req, res) => {
 
     const subdomain = xss(rawSubdomain).toLowerCase()
     
-    // -----------------------------------------------------------
-    // FITUR BARU: AUTO CLEAN TARGET (Hapus https:// & trailing slash)
-    // -----------------------------------------------------------
     if (recordType === 'CNAME') {
-        // Hapus http:// atau https://
         rawTarget = rawTarget.replace(/^https?:\/\//i, '')
-        // Hapus tanda / di akhir (misal: domain.com/)
         rawTarget = rawTarget.replace(/\/+$/, '')
     }
 
@@ -147,7 +130,6 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Nama subdomain dilarang" })
     if (subdomain.length < 3 || subdomain.length > 63) return res.status(400).json({ success: false, error: "Panjang nama 3-63 karakter" })
 
-    // Validasi IP Private (Khusus A/AAAA)
     if ((recordType === 'A' || recordType === 'AAAA') && isPrivateIP(target)) {
         return res.status(400).json({ success: false, error: "IP Private (Lokal) tidak diizinkan. Gunakan Public IP." })
     }
@@ -169,14 +151,13 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const checkData = await checkCf.json()
 
     if (checkData.result && checkData.result.length > 0) {
-      // Cek apakah user mencoba menimpa record yang sama (Opsional: Bisa update jika mau, tapi disini kita tolak dulu)
       return res.status(400).json({ success: false, error: "Subdomain sudah digunakan" })
     }
 
     const cfResponse = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`, {
       method: 'POST',
       headers: cfHeaders,
-      body: JSON.stringify({ type: recordType, name: subdomain, content: target, ttl: 1, proxied: true })
+      body: JSON.stringify({ type: recordType, name: subdomain, content: target, ttl: 1, proxied: false })
     })
     
     const cfData = await cfResponse.json()
@@ -209,7 +190,6 @@ app.post('/api/subdomain', limiter, async (req, res) => {
   }
 })
 
-// 2. REGISTER
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const name = xss(req.body.name || '')
@@ -231,7 +211,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const { error: dbError } = await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash, token }, { onConflict: 'email' })
     if (dbError) throw new Error(dbError.message)
 
-    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
+    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut untuk mengaktifkan akun:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
     
     res.json({ success: true, message: 'Email verifikasi terkirim.' })
   } catch (error) {
@@ -240,7 +220,6 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   }
 })
 
-// 3. VERIFY EMAIL
 app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
   try {
     const { token } = req.body
@@ -270,16 +249,15 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
 
     await supabase.from('users').upsert({ id: userId, email: pending.email, name: pending.name, api_key: apiKey, password_hash: pending.password_hash })
     await supabase.from('pending_registrations').delete().eq('id', pending.id)
-    await logActivity(userId, 'REGISTER', 'Verified', req)
+    await logActivity(userId, 'REGISTER', 'Account Verified', req)
 
-    res.json({ success: true, message: 'Verified.' })
+    res.json({ success: true, message: 'Account Verified.' })
   } catch (error) {
     console.error("Verify Error:", error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
 
-// 4. LOGIN CHECK
 app.post('/api/auth/login-check', authLimiter, async (req, res) => {
   try {
     const email = xss(req.body.email || '')
@@ -309,7 +287,7 @@ app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
     await supabase.from('verification_codes').delete().eq('email', email)
-    await logActivity(user.id, 'LOGIN', 'Success', req)
+    await logActivity(user.id, 'LOGIN', 'Login Success', req)
 
     res.json({ success: true, user })
   } catch (error) {
@@ -317,7 +295,6 @@ app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
   }
 })
 
-// 5. UPDATE PROFILE
 app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) => {
   try {
     const email = xss(req.body.email || '')
@@ -347,7 +324,6 @@ app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) =
   }
 })
 
-// 6. PASSWORD CHANGE
 app.post('/api/user/change-password', async (req, res) => {
   try {
     const { email, oldPassword, newPassword } = req.body
@@ -390,7 +366,6 @@ app.post('/api/user/reset-password-confirm', async (req, res) => {
   } catch (e) { res.status(500).json({success:false, error: e.message}) }
 })
 
-// 7. IP LOOKUP
 app.get('/api/lookup-ip', async (req, res) => {
     try {
         const lookup = await fetch(`http://ip-api.com/json/${req.query.ip || ''}`)
