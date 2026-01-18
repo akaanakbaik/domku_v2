@@ -14,10 +14,13 @@ dotenv.config()
 
 const app = express()
 
+// Konfigurasi Upload
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 2 * 1024 * 1024 } 
 })
+
+// --- MIDDLEWARE ---
 
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, 
@@ -38,6 +41,13 @@ app.use(cors({ origin: true, credentials: true }))
 app.use(express.json({ limit: '10kb' })) 
 app.use(limiter)
 
+// --- KONEKSI ---
+
+// Validasi Env Variable
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("FATAL: Supabase URL or Key Missing in ENV")
+}
+
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -51,13 +61,17 @@ const transporter = nodemailer.createTransport({
   }
 })
 
+// --- KONFIGURASI ---
+
 const BANNED_SUBDOMAINS = [
   'www', 'mail', 'remote', 'blog', 'webmail', 'server', 'ns1', 'ns2', 'smtp', 'secure', 
   'vpn', 'm', 'shop', 'admin', 'panel', 'cpanel', 'whm', 'billing', 'support', 'test', 
-  'dev', 'root', 'ftp', 'pop', 'imap', 'status', 'api', 'app', 'dashboard', 'auth', 'login'
+  'dev', 'root', 'ftp', 'pop', 'imap', 'status', 'api', 'app', 'dashboard', 'auth', 'login', 'domku'
 ]
 
 const SUBDOMAIN_REGEX = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/
+
+// --- HELPER FUNCTIONS ---
 
 const logActivity = async (userId, action, details, req) => {
   try {
@@ -87,17 +101,26 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
   }
 }
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '4.8.0' }))
+// --- ROUTES ---
+
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.0.0 (Token Auth)' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
+// 1. CREATE SUBDOMAIN (Cloudflare API Token Version)
 app.post('/api/subdomain', limiter, async (req, res) => {
   try {
+    // 1. Validasi API Key
     const apiKey = req.headers['x-api-key']
     if (!apiKey) return res.status(401).json({ success: false, error: "API Key required" })
 
     const { data: user, error: userError } = await supabase.from('users').select('id, email').eq('api_key', apiKey).single()
-    if (userError || !user) return res.status(403).json({ success: false, error: "Invalid API Key" })
+    
+    if (userError || !user) {
+        console.error("Auth DB Error:", userError)
+        return res.status(403).json({ success: false, error: "Invalid API Key or Database Error" })
+    }
 
+    // 2. Validasi Input
     const rawSubdomain = req.body.subdomain || ''
     const rawTarget = req.body.target || ''
     const recordType = req.body.recordType || 'A'
@@ -106,34 +129,46 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const target = xss(rawTarget)
 
     if (!subdomain || !target) return res.status(400).json({ success: false, error: "Subdomain & Target wajib diisi" })
-    
-    if (!SUBDOMAIN_REGEX.test(subdomain)) return res.status(400).json({ success: false, error: "Format nama salah" })
-    if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Nama dilarang" })
-    if (subdomain.length < 3 || subdomain.length > 63) return res.status(400).json({ success: false, error: "Panjang 3-63 karakter" })
+    if (!SUBDOMAIN_REGEX.test(subdomain)) return res.status(400).json({ success: false, error: "Format nama salah (Huruf, Angka, Titik, Strip)" })
+    if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Nama subdomain dilarang" })
+    if (subdomain.length < 3 || subdomain.length > 63) return res.status(400).json({ success: false, error: "Panjang nama 3-63 karakter" })
 
+    // 3. Limit Check
     const { count } = await supabase.from('subdomains').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
-    if (count >= 30) return res.status(400).json({ success: false, error: "Limit Max 30" })
+    if (count >= 30) return res.status(400).json({ success: false, error: "Limit Max 30 Subdomain" })
 
-    if (!process.env.CLOUDFLARE_ZONE_ID || !process.env.CLOUDFLARE_EMAIL || !process.env.CLOUDFLARE_API_KEY) {
-        throw new Error("Server Misconfiguration")
+    // 4. Cloudflare Check (BEARER TOKEN MODE)
+    // Menggunakan API Token (3zOr...), wajib Header Authorization: Bearer
+    const cfHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_KEY}`
     }
 
-    const checkUrl = `https://api.cloudflare.com/client/v4/zones/${process.env.CLOUDFLARE_ZONE_ID}/dns_records?name=${subdomain}.domku.my.id`
-    
-    const checkCf = await fetch(checkUrl, {
-        headers: { 'Content-Type': 'application/json', 'X-Auth-Email': process.env.CLOUDFLARE_EMAIL, 'X-Auth-Key': process.env.CLOUDFLARE_API_KEY }
-    })
-    
-    const checkData = await checkCf.json()
-    const existingRecords = checkData.result || []
+    const zoneId = process.env.CLOUDFLARE_ZONE_ID
+    if (!zoneId) throw new Error("Missing Cloudflare Zone ID")
 
-    if (existingRecords.length > 0) {
+    const checkUrl = `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?name=${subdomain}.domku.my.id`
+    
+    const checkCf = await fetch(checkUrl, { headers: cfHeaders })
+    const checkData = await checkCf.json()
+
+    // Defensive check
+    if (!checkData.success) {
+       console.error("CF Check Error:", JSON.stringify(checkData.errors))
+       // Jika errornya "Invalid token", berarti token salah
+       if(checkData.errors?.[0]?.code === 6003) {
+           return res.status(500).json({success: false, error: "Server Configuration Error (Invalid CF Token)"})
+       }
+    }
+
+    if (checkData.result && checkData.result.length > 0) {
       return res.status(400).json({ success: false, error: "Subdomain sudah digunakan" })
     }
 
-    const cfResponse = await fetch(`https://api.cloudflare.com/client/v4/zones/${process.env.CLOUDFLARE_ZONE_ID}/dns_records`, {
+    // 5. Cloudflare Create
+    const cfResponse = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Email': process.env.CLOUDFLARE_EMAIL, 'X-Auth-Key': process.env.CLOUDFLARE_API_KEY },
+      headers: cfHeaders,
       body: JSON.stringify({ type: recordType, name: subdomain, content: target, ttl: 1, proxied: true })
     })
     
@@ -144,6 +179,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
       throw new Error(errMsg)
     }
 
+    // 6. Simpan ke DB
     await supabase.from('subdomains').insert({ 
         user_id: user.id, 
         name: `${subdomain}.domku.my.id`, 
@@ -157,11 +193,12 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     res.json({ success: true, data: cfData.result })
 
   } catch (error) {
-    console.error("API Error:", error)
+    console.error("Subdomain Error:", error)
     res.status(500).json({ success: false, error: error.message || "Internal Server Error" })
   }
 })
 
+// 2. REGISTER
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const name = xss(req.body.name || '')
@@ -180,20 +217,24 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, salt)
     const token = crypto.randomBytes(32).toString('hex')
 
-    await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash, token }, { onConflict: 'email' })
-    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
+    const { error: dbError } = await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash, token }, { onConflict: 'email' })
+    if (dbError) throw new Error(dbError.message)
+
+    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut untuk mengaktifkan akun:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
     
     res.json({ success: true, message: 'Email verifikasi terkirim.' })
   } catch (error) {
+    console.error("Register Error:", error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
 
+// 3. VERIFY EMAIL
 app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
   try {
     const { token } = req.body
     const { data: pending } = await supabase.from('pending_registrations').select('*').eq('token', token).single()
-    if (!pending) return res.status(400).json({ success: false, error: "Token invalid" })
+    if (!pending) return res.status(400).json({ success: false, error: "Token invalid or expired" })
 
     const apiKey = crypto.randomBytes(24).toString('hex')
     let userId
@@ -206,25 +247,28 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
       userId = existing.id
       await supabase.auth.admin.updateUserById(userId, { user_metadata: { name: pending.name, api_key: apiKey }, email_confirm: true })
     } else {
-      const { data: authUser } = await supabase.auth.admin.createUser({
+      const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
         email: pending.email,
         password: "SECURE_" + crypto.randomBytes(12).toString('hex'),
         user_metadata: { name: pending.name, api_key: apiKey },
         email_confirm: true
       })
+      if (createError) throw new Error(createError.message)
       userId = authUser.user.id
     }
 
     await supabase.from('users').upsert({ id: userId, email: pending.email, name: pending.name, api_key: apiKey, password_hash: pending.password_hash })
     await supabase.from('pending_registrations').delete().eq('id', pending.id)
-    await logActivity(userId, 'REGISTER', 'Verified', req)
+    await logActivity(userId, 'REGISTER', 'Account Verified', req)
 
-    res.json({ success: true, message: 'Verified.' })
+    res.json({ success: true, message: 'Account Verified.' })
   } catch (error) {
+    console.error("Verify Error:", error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
 
+// 4. LOGIN CHECK
 app.post('/api/auth/login-check', authLimiter, async (req, res) => {
   try {
     const email = xss(req.body.email || '')
@@ -238,7 +282,7 @@ app.post('/api/auth/login-check', authLimiter, async (req, res) => {
 
     const code = Math.floor(1000 + Math.random() * 9000).toString()
     await supabase.from('verification_codes').upsert({ email, code }, { onConflict: 'email' })
-    await sendEmail(email, 'Login OTP', 'Login Code', 'OTP Code:', null, code)
+    await sendEmail(email, 'Login OTP', 'Login Access Code', 'Your OTP is:', null, code)
 
     res.json({ success: true, message: 'OTP Sent' })
   } catch (error) {
@@ -254,7 +298,7 @@ app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
     await supabase.from('verification_codes').delete().eq('email', email)
-    await logActivity(user.id, 'LOGIN', 'Success', req)
+    await logActivity(user.id, 'LOGIN', 'Login Success', req)
 
     res.json({ success: true, user })
   } catch (error) {
@@ -262,6 +306,7 @@ app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
   }
 })
 
+// 5. UPDATE PROFILE
 app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) => {
   try {
     const email = xss(req.body.email || '')
@@ -291,6 +336,7 @@ app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) =
   }
 })
 
+// 6. PASSWORD CHANGE
 app.post('/api/user/change-password', async (req, res) => {
   try {
     const { email, oldPassword, newPassword } = req.body
@@ -333,6 +379,7 @@ app.post('/api/user/reset-password-confirm', async (req, res) => {
   } catch (e) { res.status(500).json({success:false, error: e.message}) }
 })
 
+// 7. IP LOOKUP
 app.get('/api/lookup-ip', async (req, res) => {
     try {
         const lookup = await fetch(`http://ip-api.com/json/${req.query.ip || ''}`)
