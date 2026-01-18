@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { User, Lock, Save, Camera, Mail, Key, ShieldAlert, CheckCircle, AlertCircle } from 'lucide-react'
+import { User, Lock, Save, Camera, Mail, Key, ShieldAlert, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
 
 const Settings = () => {
   const { user, refreshSession } = useOutletContext()
@@ -18,6 +18,8 @@ const Settings = () => {
   // State Password
   const [pass, setPass] = useState({ old: '', new: '' })
 
+  if (!user) return null
+
   const handleProfileUpdate = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -30,8 +32,11 @@ const Settings = () => {
       formData.append('bio', profile.bio)
       formData.append('phone', profile.phone)
 
-      // Cek jika ada file avatar (implementasi input file hidden nanti jika perlu)
-      // Di sini kita fokus data teks dulu agar simpel
+      // (Opsional) Jika nanti ada input file untuk avatar:
+      // const fileInput = document.getElementById('avatarInput')
+      // if (fileInput?.files[0]) {
+      //    formData.append('avatar', fileInput.files[0])
+      // }
       
       const res = await fetch('/api/user/update-profile', {
         method: 'POST',
@@ -80,57 +85,62 @@ const Settings = () => {
     }
   }
 
-  if (!user) return null
-
   return (
-    <div className="max-w-4xl mx-auto pb-20 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="max-w-5xl mx-auto pb-20 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* HEADER */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="relative group">
-            <div className="w-16 h-16 rounded-full bg-blue-600 flex items-center justify-center text-2xl font-bold text-white overflow-hidden border-2 border-blue-400 shadow-lg shadow-blue-900/50">
+      {/* HEADER PROFILE */}
+      <div className="glass p-6 rounded-2xl border border-white/5 flex flex-col md:flex-row items-center md:items-start gap-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+        
+        <div className="relative group shrink-0">
+            <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center text-4xl font-bold text-white overflow-hidden border-4 border-[#0b0c10] shadow-2xl">
                 {user.avatar_url ? <img src={user.avatar_url} alt="Av" className="w-full h-full object-cover"/> : user.name?.charAt(0).toUpperCase()}
             </div>
-            <div className="absolute bottom-0 right-0 bg-black text-white p-1 rounded-full border border-white/20 cursor-pointer hover:bg-blue-600 transition-colors">
-                <Camera size={12}/>
+            {/* Tombol Kamera (Visual Saja untuk saat ini) */}
+            <div className="absolute bottom-0 right-0 bg-blue-500 text-white p-2 rounded-full border-2 border-[#0b0c10] cursor-pointer hover:bg-blue-400 transition-colors shadow-lg">
+                <Camera size={14}/>
             </div>
         </div>
-        <div>
-            <h1 className="text-2xl font-bold text-white">{user.name}</h1>
-            <p className="text-slate-500 text-sm flex items-center gap-1"><Mail size={12}/> {user.email}</p>
+        
+        <div className="text-center md:text-left space-y-2 flex-1">
+            <h1 className="text-3xl font-bold text-white">{user.name}</h1>
+            <div className="flex items-center justify-center md:justify-start gap-2 text-slate-400 text-sm font-mono bg-black/30 inline-flex px-3 py-1 rounded-full border border-white/5">
+                <Mail size={12}/> {user.email}
+            </div>
+            <p className="text-slate-500 text-sm max-w-lg">{user.bio || "Belum ada bio."}</p>
         </div>
       </div>
 
       {msg.text && (
-          <div className={`p-3 rounded-xl flex items-center gap-2 text-sm ${msg.type === 'success' ? 'bg-green-900/20 text-green-400 border border-green-500/20' : 'bg-red-900/20 text-red-400 border border-red-500/20'}`}>
-              {msg.type === 'success' ? <CheckCircle size={16}/> : <AlertCircle size={16}/>}
+          <div className={`p-4 rounded-xl flex items-center gap-3 text-sm font-medium animate-in slide-in-from-top-2 ${msg.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+              {msg.type === 'success' ? <CheckCircle size={18}/> : <AlertCircle size={18}/>}
               {msg.text}
           </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* LEFT: PROFILE FORM */}
-          <div className="glass p-6 rounded-2xl border border-white/5 space-y-6">
-              <div className="flex items-center gap-2 text-blue-400 mb-4 border-b border-white/5 pb-2">
-                  <User size={18}/> <h2 className="font-bold text-lg">Edit Profile</h2>
+          {/* LEFT: EDIT PROFILE */}
+          <div className="glass p-6 rounded-2xl border border-white/5 space-y-6 h-fit">
+              <div className="flex items-center gap-2 text-blue-400 mb-2 border-b border-white/5 pb-4">
+                  <User size={20}/> <h2 className="font-bold text-lg text-white">Informasi Pribadi</h2>
               </div>
               
               <form onSubmit={handleProfileUpdate} className="space-y-4">
-                  <div className="space-y-1">
-                      <label className="text-xs text-slate-500 font-bold uppercase ml-1">Nama Lengkap</label>
-                      <input type="text" value={profile.name} onChange={e => setProfile({...profile, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 outline-none transition-all" />
+                  <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Nama Lengkap</label>
+                      <input type="text" value={profile.name} onChange={e => setProfile({...profile, name: e.target.value})} className="w-full bg-[#0b0c10]/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 focus:bg-[#0b0c10] outline-none transition-all" />
                   </div>
-                  <div className="space-y-1">
-                      <label className="text-xs text-slate-500 font-bold uppercase ml-1">Bio / Info</label>
-                      <input type="text" value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 outline-none transition-all" placeholder="Developer from Indonesia" />
+                  <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Bio / Deskripsi</label>
+                      <input type="text" value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-[#0b0c10]/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 focus:bg-[#0b0c10] outline-none transition-all" placeholder="Developer..." />
                   </div>
-                  <div className="space-y-1">
-                      <label className="text-xs text-slate-500 font-bold uppercase ml-1">Phone (Optional)</label>
-                      <input type="text" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 outline-none transition-all" placeholder="0812..." />
+                  <div className="space-y-1.5">
+                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">WhatsApp / Phone</label>
+                      <input type="text" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full bg-[#0b0c10]/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 focus:bg-[#0b0c10] outline-none transition-all" placeholder="08..." />
                   </div>
-                  <button disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-600/20">
-                      {loading ? 'Saving...' : <><Save size={16}/> Simpan Perubahan</>}
+                  <button disabled={loading} className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-600/20 mt-2 disabled:opacity-70 disabled:cursor-not-allowed">
+                      {loading ? <RefreshCw size={18} className="animate-spin"/> : <><Save size={18}/> Simpan Perubahan</>}
                   </button>
               </form>
           </div>
@@ -139,28 +149,32 @@ const Settings = () => {
           <div className="space-y-6">
               
               {/* API Key Card */}
-              <div className="glass p-6 rounded-2xl border border-white/5">
-                  <div className="flex items-center gap-2 text-yellow-500 mb-4 border-b border-white/5 pb-2">
-                      <Key size={18}/> <h2 className="font-bold text-lg">API Access</h2>
-                  </div>
-                  <div className="bg-black/50 p-3 rounded-lg border border-yellow-500/20 relative group">
-                      <code className="text-xs text-slate-300 font-mono break-all">{user.api_key}</code>
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <span className="text-[10px] bg-yellow-500 text-black px-1.5 py-0.5 rounded font-bold">SECRET</span>
+              <div className="glass p-6 rounded-2xl border border-yellow-500/20 bg-yellow-500/5">
+                  <div className="flex items-center justify-between mb-4 border-b border-yellow-500/10 pb-2">
+                      <div className="flex items-center gap-2 text-yellow-500">
+                        <Key size={20}/> <h2 className="font-bold text-lg text-white">API Key Master</h2>
                       </div>
+                      <span className="text-[10px] bg-yellow-500 text-black px-2 py-0.5 rounded font-bold uppercase">Secret</span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-2">Jangan bagikan API Key ini kepada siapapun.</p>
+                  
+                  <div className="bg-black/40 p-4 rounded-xl border border-yellow-500/20 relative group hover:border-yellow-500/50 transition-colors">
+                      <code className="text-xs sm:text-sm text-slate-300 font-mono break-all leading-relaxed block">{user.api_key}</code>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-3 flex items-start gap-1.5 leading-relaxed">
+                    <AlertCircle size={12} className="shrink-0 mt-0.5"/> 
+                    Gunakan kunci ini untuk mengakses Endpoint API secara penuh. Jangan bagikan kepada siapapun.
+                  </p>
               </div>
 
               {/* Password Form */}
               <div className="glass p-6 rounded-2xl border border-white/5">
                    <div className="flex items-center gap-2 text-red-400 mb-4 border-b border-white/5 pb-2">
-                      <ShieldAlert size={18}/> <h2 className="font-bold text-lg">Keamanan</h2>
+                      <ShieldAlert size={20}/> <h2 className="font-bold text-lg text-white">Ganti Password</h2>
                   </div>
                   <form onSubmit={handlePassUpdate} className="space-y-3">
-                      <input type="password" required value={pass.old} onChange={e => setPass({...pass, old: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-red-500 outline-none" placeholder="Password Lama" />
-                      <input type="password" required value={pass.new} onChange={e => setPass({...pass, new: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-red-500 outline-none" placeholder="Password Baru (Min 6)" />
-                      <button disabled={loading} className="w-full py-2.5 bg-red-600/20 hover:bg-red-600 hover:text-white text-red-400 border border-red-600/30 rounded-xl font-bold text-sm transition-all">
+                      <input type="password" required value={pass.old} onChange={e => setPass({...pass, old: e.target.value})} className="w-full bg-[#0b0c10]/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors" placeholder="Password Lama" />
+                      <input type="password" required value={pass.new} onChange={e => setPass({...pass, new: e.target.value})} className="w-full bg-[#0b0c10]/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-red-500 outline-none transition-colors" placeholder="Password Baru (Min 6 karakter)" />
+                      <button disabled={loading} className="w-full py-3 bg-red-500/10 hover:bg-red-600 hover:text-white text-red-400 border border-red-500/20 hover:border-red-600 rounded-xl font-bold text-sm transition-all mt-2">
                           Update Password
                       </button>
                   </form>
