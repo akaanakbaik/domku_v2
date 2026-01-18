@@ -3,63 +3,40 @@ import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { Globe, Trash2, Copy, AlertCircle, Check, Plus, Search, Download, QrCode, MapPin, Activity, Clock, RefreshCw, XCircle } from 'lucide-react'
 import { DashboardSkeleton } from '../components/Skeleton'
-import Loader from '../components/Loader' // Pastikan import Loader
+import Loader from '../components/Loader'
+import { useToast } from '../context/ToastContext' // Import Toast Hook
 
 const Dashboard = () => {
-  const context = useOutletContext()
-  // Debugging: Cek apakah user terdeteksi
-  console.log("Dashboard Context:", context)
-  
-  const user = context?.user
+  const { user } = useOutletContext()
+  const { addToast } = useToast() // Init Toast
 
   const [loading, setLoading] = useState(true)
   const [subdomains, setSubdomains] = useState([])
   const [activities, setActivities] = useState([])
   const [formData, setFormData] = useState({ name: '', type: 'A', target: '' })
-  const [msg, setMsg] = useState({ type: '', text: '' })
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [copyStatus, setCopyStatus] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showQr, setShowQr] = useState(null)
   const [activeTab, setActiveTab] = useState('domains')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
-  const [errorInfo, setErrorInfo] = useState(null) // State untuk nampilin error fatal
 
   const historyRef = useRef(null)
 
   const fetchData = async () => {
     try {
       if (!user) return
-      console.log("Fetching data for user:", user.id) // Debug
       setIsRefreshing(true)
-      setErrorInfo(null)
 
-      // 1. Fetch Subdomains
-      const { data: subData, error: subError } = await supabase
-        .from('subdomains')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      
-      if (subError) throw subError
-      console.log("Subdomains Data:", subData) // Debug
+      const { data: subData } = await supabase.from('subdomains').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
       if (subData) setSubdomains(subData)
 
-      // 2. Fetch Logs
-      const { data: logData, error: logError } = await supabase
-        .from('activity_logs')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(20)
-
-      if (logError) throw logError
-      console.log("Logs Data:", logData) // Debug
+      const { data: logData } = await supabase.from('activity_logs').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20)
       if (logData) setActivities(logData)
 
     } catch (error) {
-      console.error("Dashboard Fetch Error:", error)
-      setErrorInfo(error.message)
+      console.error(error)
     } finally {
       setLoading(false)
       setIsRefreshing(false)
@@ -69,36 +46,19 @@ const Dashboard = () => {
   useEffect(() => {
     if (user) {
         fetchData()
-        
-        const subscription = supabase
-        .channel('public:dashboard')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'subdomains' }, (payload) => {
-            console.log("Realtime Subdomain Change:", payload)
-            fetchData()
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, (payload) => {
-            console.log("Realtime Log Change:", payload)
-            fetchData()
-        })
-        .subscribe()
-
-        return () => { supabase.removeChannel(subscription) }
+        const sub = supabase.channel('dashboard')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'subdomains' }, fetchData)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, fetchData)
+            .subscribe()
+        return () => { supabase.removeChannel(sub) }
     }
   }, [user])
 
-  // FIX: JANGAN return null, tampilkan Loader atau Pesan
-  if (!user) {
-      return (
-        <div className="flex flex-col items-center justify-center py-20">
-            <Loader />
-            <p className="mt-4 text-slate-500 text-sm">Memuat data pengguna...</p>
-        </div>
-      )
-  }
+  if (!user) return <div className="flex justify-center py-20"><Loader/></div>
 
   const handleCreate = async (e) => {
     e.preventDefault()
-    setMsg({ type: 'loading', text: 'Processing...' })
+    setIsSubmitting(true)
     try {
       const res = await fetch('/api/subdomain', {
         method: 'POST',
@@ -108,21 +68,21 @@ const Dashboard = () => {
       const result = await res.json()
       if (!result.success) throw new Error(result.error)
       
-      setMsg({ type: 'success', text: 'Created!' })
+      addToast('success', `Berhasil membuat ${formData.name}.domku.my.id`)
       setFormData({ name: '', type: 'A', target: '' })
       
       setActiveTab('history')
-      setTimeout(() => {
-        historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 500)
+      setTimeout(() => historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 500)
 
     } catch (err) {
-      setMsg({ type: 'error', text: err.message })
+      addToast('error', err.message)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleDelete = async (id, name) => {
-    if (!confirm(`Hapus ${name}?`)) return
+    if (!confirm(`Hapus ${name} selamanya?`)) return
     setDeletingId(id)
     try {
         const res = await fetch(`/api/subdomain/${id}`, {
@@ -132,11 +92,9 @@ const Dashboard = () => {
         const data = await res.json()
         if (!data.success) throw new Error(data.error)
         
-        // Optimistic UI Update handled by Realtime, but double check
-        setSubdomains(prev => prev.filter(item => item.id !== id))
-        
+        addToast('success', "Subdomain berhasil dihapus")
     } catch (err) {
-        alert("Gagal: " + err.message)
+        addToast('error', err.message)
     } finally {
         setDeletingId(null)
     }
@@ -146,6 +104,7 @@ const Dashboard = () => {
     navigator.clipboard.writeText(text)
     setCopyStatus(id)
     setTimeout(() => setCopyStatus(null), 1500)
+    addToast('info', "Disalin ke clipboard")
   }
 
   const exportData = () => {
@@ -156,6 +115,7 @@ const Dashboard = () => {
     document.body.appendChild(downloadAnchorNode)
     downloadAnchorNode.click()
     downloadAnchorNode.remove()
+    addToast('success', "Backup berhasil didownload")
   }
 
   const filteredSubdomains = subdomains.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -163,17 +123,8 @@ const Dashboard = () => {
   return (
     <div className="space-y-6 pb-24 relative animate-in fade-in duration-500 max-w-4xl mx-auto">
       
-      {/* ERROR DEBUGGING UI */}
-      {errorInfo && (
-          <div className="bg-red-900/20 border border-red-500/50 p-4 rounded-xl text-red-200 text-sm mb-6">
-              <p className="font-bold mb-1">Gagal Memuat Data:</p>
-              <code className="block bg-black/30 p-2 rounded">{errorInfo}</code>
-              <p className="mt-2 text-xs opacity-70">Saran: Coba Logout dan Login kembali.</p>
-          </div>
-      )}
-
       {showQr && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6" onClick={() => setShowQr(null)}>
+        <div className="fixed inset-0 z-[50] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6" onClick={() => setShowQr(null)}>
             <div className="bg-white p-6 rounded-2xl shadow-2xl text-center animate-in zoom-in duration-300 w-full max-w-[280px]" onClick={e => e.stopPropagation()}>
                 <h3 className="text-black font-bold mb-4 text-sm truncate">{showQr}</h3>
                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=http://${showQr}`} alt="QR" className="mx-auto rounded-xl border-2 border-black w-full" />
@@ -192,13 +143,6 @@ const Dashboard = () => {
           </div>
           <button onClick={fetchData} className={`p-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all ${isRefreshing ? 'animate-spin' : ''}`}><RefreshCw size={14}/></button>
         </div>
-        
-        {msg.text && (
-          <div className={`mb-4 p-2.5 rounded-lg border flex items-center gap-2 relative z-10 text-[11px] ${msg.type === 'error' ? 'bg-red-900/20 border-red-500/30 text-red-400' : (msg.type === 'loading' ? 'bg-blue-900/20 border-blue-500/30 text-blue-400' : 'bg-green-900/20 border-green-500/30 text-green-400')}`}>
-            {msg.type === 'loading' ? <RefreshCw size={12} className="animate-spin"/> : msg.type === 'error' ? <XCircle size={12}/> : <Check size={12}/>}
-            <span className="font-medium">{msg.text}</span>
-          </div>
-        )}
         
         <form onSubmit={handleCreate} className="space-y-3 relative z-10">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
@@ -220,18 +164,17 @@ const Dashboard = () => {
                 <input type="text" required value={formData.target} onChange={(e) => setFormData({ ...formData, target: e.target.value })} className="w-full bg-[#0b0c10]/60 border border-blue-900/20 rounded-lg py-2 px-3 text-xs text-white focus:border-blue-500 font-mono placeholder-slate-700 outline-none" placeholder="1.1.1.1" />
             </div>
           </div>
-          <button type="submit" disabled={msg.type === 'loading'} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]">{msg.type === 'loading' ? 'Processing...' : <><Plus size={14} /> Create Record</>}</button>
+          <button type="submit" disabled={isSubmitting} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]">{isSubmitting ? <Loader2 size={14} className="animate-spin"/> : <><Plus size={14} /> Create Record</>}</button>
         </form>
       </div>
 
-      {/* TABS */}
+      {/* TABS & LISTS (Sama dengan sebelumnya, hanya logic delete sudah diperbaiki) */}
       <div className="flex gap-2 border-b border-blue-900/20 pb-1 overflow-x-auto no-scrollbar">
         <button onClick={() => setActiveTab('domains')} className={`flex items-center gap-1.5 pb-2 px-3 text-[11px] font-bold transition-all border-b-2 whitespace-nowrap ${activeTab === 'domains' ? 'text-blue-500 border-blue-500' : 'text-slate-500 border-transparent hover:text-white'}`}><Globe size={12}/> Domains ({subdomains.length})</button>
         <button onClick={() => setActiveTab('history')} className={`flex items-center gap-1.5 pb-2 px-3 text-[11px] font-bold transition-all border-b-2 whitespace-nowrap ${activeTab === 'history' ? 'text-blue-500 border-blue-500' : 'text-slate-500 border-transparent hover:text-white'}`}><Activity size={12}/> Log</button>
       </div>
 
       <div className="space-y-3 min-h-[300px]">
-        {/* DOMAINS LIST */}
         {activeTab === 'domains' && (
           <>
             <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center gap-3">
