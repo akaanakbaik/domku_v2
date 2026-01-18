@@ -14,30 +14,31 @@ dotenv.config()
 
 const app = express()
 
+// Konfigurasi Upload
 const upload = multer({ 
   storage: multer.memoryStorage(), 
   limits: { fileSize: 5 * 1024 * 1024 } 
 })
 
+// Security Middleware
+app.use(helmet())
+app.use(cors({ origin: true, credentials: true })) 
+app.use(express.json({ limit: '10kb' })) 
+
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, 
-  max: 100, 
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: "Rate limit exceeded" }
+  max: 100,
+  message: { success: false, error: "Traffic terlalu tinggi, coba lagi nanti." }
 })
+app.use(limiter)
 
 const authLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, 
   max: 50, 
-  message: { success: false, error: "Too many auth attempts" }
+  message: { success: false, error: "Limit login/register tercapai." }
 })
 
-app.use(helmet())
-app.use(cors({ origin: true, credentials: true })) 
-app.use(express.json({ limit: '10kb' })) 
-app.use(limiter)
-
+// Database & Email Connection
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_ROLE_KEY || ''
@@ -51,12 +52,8 @@ const transporter = nodemailer.createTransport({
   }
 })
 
-const BANNED_SUBDOMAINS = [
-  'www', 'mail', 'remote', 'blog', 'webmail', 'server', 'ns1', 'ns2', 'smtp', 'secure', 
-  'vpn', 'm', 'shop', 'admin', 'panel', 'cpanel', 'whm', 'billing', 'support', 'test', 
-  'dev', 'root', 'ftp', 'pop', 'imap', 'status', 'api', 'app', 'dashboard', 'auth', 'login', 'domku'
-]
-
+// Helpers
+const BANNED_SUBDOMAINS = ['www', 'mail', 'remote', 'blog', 'webmail', 'server', 'ns1', 'ns2', 'smtp', 'secure', 'vpn', 'm', 'shop', 'admin', 'panel', 'cpanel', 'whm', 'billing', 'support', 'test', 'dev', 'root', 'ftp', 'pop', 'imap', 'status', 'api', 'app', 'dashboard', 'auth', 'login', 'domku']
 const SUBDOMAIN_REGEX = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/
 
 const isPrivateIP = (ip) => {
@@ -73,15 +70,17 @@ const logActivity = async (userId, action, details, req) => {
   try {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown'
     await supabase.from('activity_logs').insert({ user_id: userId, action, details, ip_address: ip })
-  } catch (e) { console.error(e) }
+  } catch (e) { console.error("Log error:", e) }
 }
 
 const getHtmlTemplate = (title, bodyContent, buttonText = null, buttonUrl = null, footerNote = '') => {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Segoe UI',sans-serif;background-color:#f4f4f9;margin:0;padding:0}.container{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.05)}.header{background:#0f172a;padding:30px;text-align:center}.header h1{color:#3b82f6;margin:0;font-size:24px;letter-spacing:2px}.content{padding:40px 30px;color:#334155;line-height:1.6}.btn{display:inline-block;background:#2563eb;color:#fff!important;padding:12px 30px;text-decoration:none;border-radius:8px;font-weight:600;margin-top:20px;box-shadow:0 4px 6px rgba(37,99,235,0.2)}.btn:hover{background:#1d4ed8}.footer{background:#f8fafc;padding:20px;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0}.link-break{word-break:break-all;font-size:12px;color:#94a3b8;margin-top:20px}</style></head><body><div class="container"><div class="header"><h1>DOMKU MANAGER</h1></div><div class="content"><h2 style="color:#1e293b;margin-top:0">${title}</h2>${bodyContent}${buttonText?`<div style="text-align:center"><a href="${buttonUrl}" class="btn">${buttonText}</a></div>`:''}${buttonUrl?`<p class="link-break">Link: <br>${buttonUrl}</p>`:''}</div><div class="footer"><p>${footerNote}</p><p>&copy; 2026 Domku System</p></div></div></body></html>`
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Segoe UI',sans-serif;background-color:#f4f4f9;margin:0;padding:0}.container{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.05)}.header{background:#0f172a;padding:30px;text-align:center}.header h1{color:#3b82f6;margin:0;font-size:24px;letter-spacing:2px}.content{padding:40px 30px;color:#334155;line-height:1.6}.btn{display:inline-block;background:#2563eb;color:#fff!important;padding:12px 30px;text-decoration:none;border-radius:8px;font-weight:600;margin-top:20px;box-shadow:0 4px 6px rgba(37,99,235,0.2)}.btn:hover{background:#1d4ed8}.footer{background:#f8fafc;padding:20px;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0}.link-break{word-break:break-all;font-size:12px;color:#94a3b8;margin-top:20px}</style></head><body><div class="container"><div class="header"><h1>DOMKU MANAGER</h1></div><div class="content"><h2 style="color:#1e293b;margin-top:0">${title}</h2>${bodyContent}${buttonText?`<div style="text-align:center"><a href="${buttonUrl}" class="btn">${buttonText}</a></div>`:''}${buttonUrl?`<p class="link-break">Link Validasi: <br>${buttonUrl}</p>`:''}</div><div class="footer"><p>${footerNote}</p><p>&copy; 2026 Domku System V2.6</p></div></div></body></html>`
 }
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '2.5.0' }))
-app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
+// --- SYSTEM CHECK ---
+app.get('/api', (req, res) => res.json({ status: 'Online', system: 'V2.6 Stable' }))
+
+// --- AUTHENTICATION ---
 
 // 1. REGISTER
 app.post('/api/auth/register', authLimiter, async (req, res) => {
@@ -91,37 +90,69 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const password = req.body.password || ''
     const origin = req.body.origin || ''
 
-    if (!name || !rawEmail || !password) return res.status(400).json({ success: false, error: "Data incomplete" })
+    if (!name || !rawEmail || !password) return res.status(400).json({ success: false, error: "Data tidak lengkap" })
     
-    // WAJIB LOWERCASE
+    // Normalisasi Email (Lowercase)
     const email = rawEmail.toLowerCase().trim()
 
+    // Cek User Existing
     const { data: userList } = await supabase.auth.admin.listUsers()
     if (userList?.users?.find(u => u.email === email)) return res.status(400).json({ success: false, error: "Email sudah terdaftar" })
 
+    // Hash Password
     const salt = await bcrypt.genSalt(10)
     const passwordHash = await bcrypt.hash(password, salt)
+    
+    // Token Logic
     const token = crypto.randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + 10 * 60000)
+    const expiresAt = new Date(Date.now() + 10 * 60000) // 10 Menit
 
-    // Hapus data pending lama jika ada (agar tidak duplikat error)
+    // 1. Bersihkan Pending Lama (jika user daftar ulang karena gagal verify sebelumnya)
     await supabase.from('pending_registrations').delete().eq('email', email)
     
-    // Simpan baru
-    const { error: pendError } = await supabase.from('pending_registrations').insert({ name, email, password_hash: passwordHash })
-    if (pendError) throw new Error("Database Error: " + pendError.message)
+    // 2. Insert Data Pending (TANPA TOKEN di tabel ini, karena sudah dihapus kolomnya)
+    const { error: pendError } = await supabase.from('pending_registrations').insert({ 
+      name, 
+      email, 
+      password_hash: passwordHash 
+    })
+    
+    if (pendError) {
+        console.error("DB Pending Error:", pendError)
+        return res.status(500).json({ success: false, error: "Gagal menyimpan data registrasi." })
+    }
 
-    await supabase.from('auth_tokens').insert({ email, token, type: 'VERIFY_EMAIL', expires_at: expiresAt })
+    // 3. Insert Token di Tabel Khusus
+    const { error: tokenError } = await supabase.from('auth_tokens').insert({ 
+      email, 
+      token, 
+      type: 'VERIFY_EMAIL', 
+      expires_at: expiresAt 
+    })
 
+    if (tokenError) {
+        console.error("DB Token Error:", tokenError)
+        return res.status(500).json({ success: false, error: "Gagal membuat token verifikasi." })
+    }
+
+    // 4. Kirim Email
     const verifyUrl = `${origin}/verify-email?token=${token}&email=${email}`
-    const html = getHtmlTemplate('Verifikasi Email', `<p>Halo <b>${name}</b>,</p><p>Klik tombol di bawah untuk mengaktifkan akun Anda.</p>`, 'Verifikasi Sekarang', verifyUrl)
+    const html = getHtmlTemplate(
+      'Verifikasi Email', 
+      `<p>Halo <b>${name}</b>,</p><p>Terima kasih telah mendaftar. Klik tombol di bawah untuk mengaktifkan akun Anda.</p>`, 
+      'Verifikasi Sekarang', 
+      verifyUrl
+    )
     await transporter.sendMail({ from: `"Domku Security" <${process.env.NODEMAILER_EMAIL}>`, to: email, subject: 'Aktivasi Akun', html })
 
-    res.json({ success: true, message: 'Link verifikasi dikirim.' })
-  } catch (error) { res.status(500).json({ success: false, error: error.message }) }
+    res.json({ success: true, message: 'Link verifikasi terkirim ke email.' })
+  } catch (error) { 
+    console.error("Register Error:", error)
+    res.status(500).json({ success: false, error: error.message }) 
+  }
 })
 
-// 2. VERIFY EMAIL (FIXED: Case Insensitive)
+// 2. VERIFY EMAIL
 app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
   try {
     const { token } = req.body
@@ -130,39 +161,33 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
     // 1. Cek Token
     const { data: tokenData } = await supabase.from('auth_tokens').select('*').eq('token', token).eq('type', 'VERIFY_EMAIL').single()
     
-    // Jika token tidak ditemukan, cek apakah user sudah aktif (Fallback)
+    // Failover: Jika token hilang, cek apakah user sudah aktif
     if (!tokenData) {
         if (emailInput) {
-            const { data: existing } = await supabase.from('users').select('id').ilike('email', emailInput).single()
-            if (existing) return res.json({ success: true, message: 'Akun sudah aktif.' })
+            const { data: existing } = await supabase.from('users').select('id').eq('email', emailInput).single()
+            if (existing) return res.json({ success: true, message: 'Akun Anda sudah aktif.' })
         }
-        return res.status(400).json({ success: false, error: "Link tidak valid atau sudah digunakan." })
+        return res.status(400).json({ success: false, error: "Link verifikasi tidak valid / kadaluarsa." })
     }
 
-    if (new Date(tokenData.expires_at) < new Date()) return res.status(400).json({ success: false, error: "Link kadaluarsa." })
+    if (new Date(tokenData.expires_at) < new Date()) return res.status(400).json({ success: false, error: "Link sudah kadaluarsa." })
 
-    const email = tokenData.email.toLowerCase().trim()
+    const email = tokenData.email.toLowerCase()
     
-    // 2. Cek Data Pending dengan ILIKE (Case Insensitive Match)
-    const { data: pending, error: pendError } = await supabase
-        .from('pending_registrations')
-        .select('*')
-        .ilike('email', email) // FIX UTAMA: ilike
-        .single()
+    // 2. Ambil Data Registrasi
+    const { data: pending } = await supabase.from('pending_registrations').select('*').eq('email', email).single()
     
     if (!pending) {
-        // Double Check: Apakah user sudah ada di tabel users?
-        const { data: existing } = await supabase.from('users').select('id').ilike('email', email).single()
+        // Cek lagi tabel users (race condition check)
+        const { data: existing } = await supabase.from('users').select('id').eq('email', email).single()
         if (existing) {
-            // Bersihkan token sisa
             await supabase.from('auth_tokens').delete().eq('token', token)
             return res.json({ success: true, message: 'Akun sudah aktif.' })
         }
-        console.error("Verify Error: Pending Data Not Found for", email)
-        return res.status(400).json({ success: false, error: "Data registrasi tidak ditemukan. Silakan daftar ulang." })
+        return res.status(400).json({ success: false, error: "Data registrasi tidak ditemukan. Mohon daftar ulang." })
     }
 
-    // 3. Create User
+    // 3. Buat User Resmi
     const apiKey = crypto.randomBytes(24).toString('hex')
     const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
       email: pending.email,
@@ -175,16 +200,19 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
 
     await supabase.from('users').upsert({ id: authUser.user.id, email: pending.email, name: pending.name, api_key: apiKey, password_hash: pending.password_hash })
     
-    // Cleanup
-    await supabase.from('pending_registrations').delete().ilike('email', email)
+    // 4. Bersih-bersih
+    await supabase.from('pending_registrations').delete().eq('email', email)
     await supabase.from('auth_tokens').delete().eq('token', token)
 
-    res.json({ success: true, message: 'Akun berhasil diaktifkan.' })
+    res.json({ success: true, message: 'Akun berhasil diaktifkan!' })
   } catch (error) { 
-      console.error("Verify Exception:", error)
+      console.error("Verify Error:", error)
       res.status(500).json({ success: false, error: error.message }) 
   }
 })
+
+// ... (SISA KODE SAMA: Reset Password, Login, Subdomain, dll) ...
+// Copy paste bagian bawah ini agar file lengkap
 
 // 3. FORGOT PASSWORD
 app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
@@ -192,7 +220,7 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
     const email = req.body.email ? req.body.email.toLowerCase().trim() : ''
     const origin = req.body.origin
 
-    const { data: user } = await supabase.from('users').select('id, name').ilike('email', email).single()
+    const { data: user } = await supabase.from('users').select('id, name').eq('email', email).single()
     if (!user) return res.status(404).json({ success: false, error: "Email tidak ditemukan." })
 
     const token = crypto.randomBytes(32).toString('hex')
@@ -202,10 +230,10 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
     await supabase.from('auth_tokens').insert({ email, token, type: 'RESET_PASSWORD', expires_at: expiresAt })
 
     const resetUrl = `${origin}/reset-password?token=${token}&email=${email}`
-    const html = getHtmlTemplate('Reset Password', `<p>Halo <b>${user.name}</b>,</p><p>Klik tombol di bawah untuk mereset kata sandi Anda.</p>`, 'Ubah Password', resetUrl)
-    await transporter.sendMail({ from: `"Domku Security" <${process.env.NODEMAILER_EMAIL}>`, to: email, subject: 'Permintaan Reset Password', html })
+    const html = getHtmlTemplate('Reset Password', `<p>Halo <b>${user.name}</b>,</p><p>Klik tombol di bawah untuk reset password.</p>`, 'Ubah Password', resetUrl)
+    await transporter.sendMail({ from: `"Domku Security" <${process.env.NODEMAILER_EMAIL}>`, to: email, subject: 'Reset Password', html })
 
-    res.json({ success: true, message: 'Link reset telah dikirim.' })
+    res.json({ success: true, message: 'Link reset dikirim ke email.' })
   } catch (error) { res.status(500).json({ success: false, error: error.message }) }
 })
 
@@ -215,14 +243,13 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
     const { token, newPassword } = req.body
     
     const { data: tokenData } = await supabase.from('auth_tokens').select('*').eq('token', token).eq('type', 'RESET_PASSWORD').single()
-    if (!tokenData) return res.status(400).json({ success: false, error: "Link invalid." })
-    if (new Date(tokenData.expires_at) < new Date()) return res.status(400).json({ success: false, error: "Link expired." })
+    if (!tokenData) return res.status(400).json({ success: false, error: "Link tidak valid." })
+    if (new Date(tokenData.expires_at) < new Date()) return res.status(400).json({ success: false, error: "Link kadaluarsa." })
 
-    const email = tokenData.email
     const salt = await bcrypt.genSalt(12)
     const newHash = await bcrypt.hash(newPassword, salt)
 
-    await supabase.from('users').update({ password_hash: newHash }).eq('email', email)
+    await supabase.from('users').update({ password_hash: newHash }).eq('email', tokenData.email)
     await supabase.from('auth_tokens').delete().eq('token', token)
 
     res.json({ success: true, message: 'Password berhasil diubah.' })
@@ -258,7 +285,7 @@ app.post('/api/auth/login-check', authLimiter, async (req, res) => {
     const password = req.body.password || ''
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
-    if (!user) return res.status(400).json({ success: false, error: "User not found" })
+    if (!user) return res.status(400).json({ success: false, error: "User tidak ditemukan" })
 
     const isValid = await bcrypt.compare(password, user.password_hash)
     if (!isValid) return res.status(400).json({ success: false, error: "Password salah" })
@@ -266,7 +293,7 @@ app.post('/api/auth/login-check', authLimiter, async (req, res) => {
     const code = Math.floor(1000 + Math.random() * 9000).toString()
     await supabase.from('verification_codes').upsert({ email, code }, { onConflict: 'email' })
     
-    const html = getHtmlTemplate('Kode Login', `<p>Kode login Anda:</p><h1 style="text-align:center;letter-spacing:5px;">${code}</h1>`, null, null, 'Rahasiakan kode ini.')
+    const html = getHtmlTemplate('Kode Login', `<p>Gunakan kode login ini:</p><h1 style="text-align:center;letter-spacing:5px;">${code}</h1>`, null, null, 'Rahasiakan kode ini.')
     await transporter.sendMail({ from: `"Domku Auth" <${process.env.NODEMAILER_EMAIL}>`, to: email, subject: 'Login OTP', html })
 
     res.json({ success: true, message: 'OTP Sent' })
@@ -331,7 +358,7 @@ app.post('/api/user/change-password', async (req, res) => {
     await supabase.from('users').update({ password_hash: newHash }).eq('email', email)
     await logActivity(user.id, 'CHANGE_PASSWORD', 'Success', req)
     
-    res.json({ success: true, message: 'Changed' })
+    res.json({ success: true, message: 'Password updated' })
   } catch (e) { res.status(500).json({success: false, error: e.message}) }
 })
 
@@ -364,7 +391,7 @@ app.delete('/api/user/delete-account', async (req, res) => {
     await supabase.auth.admin.deleteUser(user.id)
     await supabase.from('users').delete().eq('id', user.id)
 
-    res.json({success: true, message: "Deleted"})
+    res.json({success: true, message: "Account deleted"})
   } catch (e) { res.status(500).json({success: false, error: e.message}) }
 })
 
@@ -385,7 +412,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     if (recordType === 'CNAME') rawTarget = rawTarget.replace(/^https?:\/\//i, '').replace(/\/+$/, '')
     const target = xss(rawTarget)
 
-    if (!subdomain || !target) return res.status(400).json({ success: false, error: "Incomplete" })
+    if (!subdomain || !target) return res.status(400).json({ success: false, error: "Incomplete data" })
     if (!SUBDOMAIN_REGEX.test(subdomain)) return res.status(400).json({ success: false, error: "Invalid format" })
     if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Banned name" })
     if ((recordType === 'A' || recordType === 'AAAA') && isPrivateIP(target)) return res.status(400).json({ success: false, error: "Private IP disallowed" })
