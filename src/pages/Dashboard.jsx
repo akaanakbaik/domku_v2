@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Globe, Trash2, Copy, AlertCircle, Check, Plus, Search, Download, QrCode, MapPin, Activity, Clock, RefreshCw, XCircle } from 'lucide-react'
+import { Globe, Trash2, Copy, Plus, Search, Download, QrCode, MapPin, Activity, Clock, RefreshCw, Check } from 'lucide-react'
 import { DashboardSkeleton } from '../components/Skeleton'
 import Loader from '../components/Loader'
-import { useToast } from '../context/ToastContext' // Import Toast Hook
+import { useToast } from '../context/ToastContext'
 
 const Dashboard = () => {
   const { user } = useOutletContext()
-  const { addToast } = useToast() // Init Toast
+  const { addToast } = useToast()
 
   const [loading, setLoading] = useState(true)
   const [subdomains, setSubdomains] = useState([])
@@ -68,7 +68,7 @@ const Dashboard = () => {
       const result = await res.json()
       if (!result.success) throw new Error(result.error)
       
-      addToast('success', `Berhasil membuat ${formData.name}.domku.my.id`)
+      addToast('success', `Subdomain ${formData.name}.domku.my.id berhasil dibuat!`)
       setFormData({ name: '', type: 'A', target: '' })
       
       setActiveTab('history')
@@ -115,7 +115,7 @@ const Dashboard = () => {
     document.body.appendChild(downloadAnchorNode)
     downloadAnchorNode.click()
     downloadAnchorNode.remove()
-    addToast('success', "Backup berhasil didownload")
+    addToast('success', "Data berhasil diexport")
   }
 
   const filteredSubdomains = subdomains.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -164,11 +164,10 @@ const Dashboard = () => {
                 <input type="text" required value={formData.target} onChange={(e) => setFormData({ ...formData, target: e.target.value })} className="w-full bg-[#0b0c10]/60 border border-blue-900/20 rounded-lg py-2 px-3 text-xs text-white focus:border-blue-500 font-mono placeholder-slate-700 outline-none" placeholder="1.1.1.1" />
             </div>
           </div>
-          <button type="submit" disabled={isSubmitting} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]">{isSubmitting ? <Loader2 size={14} className="animate-spin"/> : <><Plus size={14} /> Create Record</>}</button>
+          <button type="submit" disabled={isSubmitting} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]">{isSubmitting ? <Loader size={14} className="animate-spin"/> : <><Plus size={14} /> Create Record</>}</button>
         </form>
       </div>
 
-      {/* TABS & LISTS (Sama dengan sebelumnya, hanya logic delete sudah diperbaiki) */}
       <div className="flex gap-2 border-b border-blue-900/20 pb-1 overflow-x-auto no-scrollbar">
         <button onClick={() => setActiveTab('domains')} className={`flex items-center gap-1.5 pb-2 px-3 text-[11px] font-bold transition-all border-b-2 whitespace-nowrap ${activeTab === 'domains' ? 'text-blue-500 border-blue-500' : 'text-slate-500 border-transparent hover:text-white'}`}><Globe size={12}/> Domains ({subdomains.length})</button>
         <button onClick={() => setActiveTab('history')} className={`flex items-center gap-1.5 pb-2 px-3 text-[11px] font-bold transition-all border-b-2 whitespace-nowrap ${activeTab === 'history' ? 'text-blue-500 border-blue-500' : 'text-slate-500 border-transparent hover:text-white'}`}><Activity size={12}/> Log</button>
