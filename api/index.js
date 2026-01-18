@@ -101,9 +101,10 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
   }
 }
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.4.0 (Realtime Ready)' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '6.0.0 (Full Sync)' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
+// 1. CREATE SUBDOMAIN
 app.post('/api/subdomain', limiter, async (req, res) => {
   try {
     const apiKey = req.headers['x-api-key']
@@ -170,7 +171,6 @@ app.post('/api/subdomain', limiter, async (req, res) => {
       throw new Error(errMsg)
     }
 
-    // Insert Subdomain to DB
     await supabase.from('subdomains').insert({ 
         user_id: user.id, 
         name: `${subdomain}.domku.my.id`, 
@@ -179,7 +179,6 @@ app.post('/api/subdomain', limiter, async (req, res) => {
         cf_id: cfData.result?.id || 'unknown'
     })
     
-    // Insert Activity Log (Realtime Trigger)
     await logActivity(user.id, 'CREATE_SUBDOMAIN', `Created ${subdomain}.domku.my.id -> ${target}`, req)
 
     res.json({ success: true, data: cfData.result })
@@ -190,6 +189,53 @@ app.post('/api/subdomain', limiter, async (req, res) => {
   }
 })
 
+// 2. DELETE SUBDOMAIN (NEW FEATURE)
+app.delete('/api/subdomain/:id', limiter, async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key']
+    const subId = req.params.id
+    
+    if (!apiKey) return res.status(401).json({ success: false, error: "API Key required" })
+
+    // Cek User
+    const { data: user, error: userError } = await supabase.from('users').select('id').eq('api_key', apiKey).single()
+    if (userError || !user) return res.status(403).json({ success: false, error: "Invalid API Key" })
+
+    // Cek Subdomain di DB (Pastikan milik user ini)
+    const { data: subData, error: subDataError } = await supabase.from('subdomains').select('*').eq('id', subId).eq('user_id', user.id).single()
+    
+    if (subDataError || !subData) {
+        return res.status(404).json({ success: false, error: "Subdomain tidak ditemukan atau bukan milik Anda" })
+    }
+
+    // Hapus di Cloudflare
+    if (subData.cf_id && subData.cf_id !== 'unknown') {
+        const zoneId = process.env.CLOUDFLARE_ZONE_ID
+        const cfHeaders = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.CLOUDFLARE_API_KEY}`
+        }
+        
+        await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${subData.cf_id}`, {
+            method: 'DELETE',
+            headers: cfHeaders
+        })
+    }
+
+    // Hapus di DB
+    await supabase.from('subdomains').delete().eq('id', subId)
+    
+    await logActivity(user.id, 'DELETE_SUBDOMAIN', `Deleted ${subData.name}`, req)
+
+    res.json({ success: true, message: "Subdomain deleted successfully" })
+
+  } catch (error) {
+    console.error("Delete Error:", error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// AUTH ROUTES
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const name = xss(req.body.name || '')
