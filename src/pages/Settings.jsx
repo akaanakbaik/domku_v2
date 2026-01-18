@@ -169,4 +169,36 @@ const Settings = () => {
                   <div className="flex items-center gap-2 mb-6"><Lock className="text-slate-400" size={20}/> <h2 className="font-bold text-lg text-white">Ganti Password</h2></div>
                   <form onSubmit={handlePassUpdate} className="space-y-4">
                       <input type="password" required value={pass.old} onChange={e => setPass({...pass, old: e.target.value})} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 outline-none" placeholder="Password Lama" />
-                      <input type="password" required value={pass.new} onChange={e => setPass({...pass, new: e.target.value})} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl px-4 py-
+                      <input type="password" required value={pass.new} onChange={e => setPass({...pass, new: e.target.value})} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500 outline-none" placeholder="Password Baru" />
+                      <button disabled={loading} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-sm transition-all border border-white/5">Update Password</button>
+                  </form>
+              </section>
+          </div>
+      </div>
+
+      {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+              <div className="bg-[#16181d] border border-red-500/30 p-6 rounded-2xl max-w-sm w-full shadow-2xl animate-in zoom-in-95">
+                  <div className="flex items-center gap-3 text-red-500 mb-4">
+                      <div className="p-3 bg-red-500/10 rounded-full"><AlertTriangle size={24}/></div>
+                      <h3 className="text-xl font-bold text-white">Konfirmasi Hapus</h3>
+                  </div>
+                  <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+                      Ketik password Anda untuk mengonfirmasi penghapusan akun. <br/>
+                      <span className="text-red-400 font-bold">Semua data akan hilang selamanya.</span>
+                  </p>
+                  <input type="password" placeholder="Masukkan password Anda" value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} className="w-full bg-black/50 border border-red-500/30 rounded-xl px-4 py-3 text-white focus:border-red-500 outline-none mb-4"/>
+                  <div className="flex gap-3">
+                      <button onClick={() => {setShowDeleteModal(false); setDeleteConfirm('')}} className="flex-1 py-2.5 bg-slate-800 text-white rounded-xl font-bold text-sm hover:bg-slate-700">Batal</button>
+                      <button onClick={handleDeleteAccount} disabled={loading || !deleteConfirm} className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                          {loading ? <Loader2 size={16} className="animate-spin"/> : <Trash2 size={16}/>} Hapus
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+    </div>
+  )
+}
+
+export default Settings
