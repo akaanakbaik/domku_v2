@@ -72,23 +72,13 @@ const SUBDOMAIN_REGEX = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/
 
 // --- HELPER FUNCTIONS ---
 
-// Helper untuk Cek IP Private (LAN)
 const isPrivateIP = (ip) => {
    const parts = ip.split('.');
-   if (parts.length !== 4) return false; // Bukan IPv4 standar
-   
-   // 10.0.0.0 - 10.255.255.255
+   if (parts.length !== 4) return false;
    if (parts[0] === '10') return true;
-   
-   // 172.16.0.0 - 172.31.255.255
    if (parts[0] === '172' && parts[1] >= 16 && parts[1] <= 31) return true;
-   
-   // 192.168.0.0 - 192.168.255.255
    if (parts[0] === '192' && parts[1] === '168') return true;
-   
-   // 127.0.0.0 - 127.255.255.255 (Loopback)
    if (parts[0] === '127') return true;
-   
    return false;
 }
 
@@ -122,7 +112,7 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
 
 // --- ROUTES ---
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.1.0' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.2.0 (Auto Clean CNAME)' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
 // 1. CREATE SUBDOMAIN
@@ -135,10 +125,21 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     if (userError || !user) return res.status(403).json({ success: false, error: "Invalid API Key" })
 
     const rawSubdomain = req.body.subdomain || ''
-    const rawTarget = req.body.target || ''
+    let rawTarget = req.body.target || ''
     const recordType = req.body.recordType || 'A'
 
     const subdomain = xss(rawSubdomain).toLowerCase()
+    
+    // -----------------------------------------------------------
+    // FITUR BARU: AUTO CLEAN TARGET (Hapus https:// & trailing slash)
+    // -----------------------------------------------------------
+    if (recordType === 'CNAME') {
+        // Hapus http:// atau https://
+        rawTarget = rawTarget.replace(/^https?:\/\//i, '')
+        // Hapus tanda / di akhir (misal: domain.com/)
+        rawTarget = rawTarget.replace(/\/+$/, '')
+    }
+
     const target = xss(rawTarget)
 
     if (!subdomain || !target) return res.status(400).json({ success: false, error: "Subdomain & Target wajib diisi" })
@@ -146,12 +147,9 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Nama subdomain dilarang" })
     if (subdomain.length < 3 || subdomain.length > 63) return res.status(400).json({ success: false, error: "Panjang nama 3-63 karakter" })
 
-    // Validasi IP Private
-    if (recordType === 'A' && isPrivateIP(target)) {
-        return res.status(400).json({ 
-            success: false, 
-            error: "IP Private (Lokal) tidak diizinkan. Gunakan Public IP." 
-        })
+    // Validasi IP Private (Khusus A/AAAA)
+    if ((recordType === 'A' || recordType === 'AAAA') && isPrivateIP(target)) {
+        return res.status(400).json({ success: false, error: "IP Private (Lokal) tidak diizinkan. Gunakan Public IP." })
     }
 
     const { count } = await supabase.from('subdomains').select('*', { count: 'exact', head: true }).eq('user_id', user.id)
@@ -171,6 +169,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const checkData = await checkCf.json()
 
     if (checkData.result && checkData.result.length > 0) {
+      // Cek apakah user mencoba menimpa record yang sama (Opsional: Bisa update jika mau, tapi disini kita tolak dulu)
       return res.status(400).json({ success: false, error: "Subdomain sudah digunakan" })
     }
 
@@ -183,12 +182,10 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     const cfData = await cfResponse.json()
     
     if (!cfData.success) {
-      // Menangkap pesan error detail dari Cloudflare
       const errMsg = cfData.errors?.[0]?.message || JSON.stringify(cfData.errors) || 'Cloudflare Creation Failed'
       
-      // Jika errornya "Target is a private IP" (Code 1004)
       if (errMsg.includes("private IP") || errMsg.includes("1004")) {
-          return res.status(400).json({ success: false, error: "Cloudflare menolak IP Lokal/Private. Gunakan IP Public." })
+          return res.status(400).json({ success: false, error: "Cloudflare menolak IP Lokal. Gunakan IP Public." })
       }
       
       throw new Error(errMsg)
@@ -234,7 +231,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const { error: dbError } = await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash, token }, { onConflict: 'email' })
     if (dbError) throw new Error(dbError.message)
 
-    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut untuk mengaktifkan akun:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
+    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
     
     res.json({ success: true, message: 'Email verifikasi terkirim.' })
   } catch (error) {
@@ -273,9 +270,9 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
 
     await supabase.from('users').upsert({ id: userId, email: pending.email, name: pending.name, api_key: apiKey, password_hash: pending.password_hash })
     await supabase.from('pending_registrations').delete().eq('id', pending.id)
-    await logActivity(userId, 'REGISTER', 'Account Verified', req)
+    await logActivity(userId, 'REGISTER', 'Verified', req)
 
-    res.json({ success: true, message: 'Account Verified.' })
+    res.json({ success: true, message: 'Verified.' })
   } catch (error) {
     console.error("Verify Error:", error)
     res.status(500).json({ success: false, error: error.message })
@@ -312,7 +309,7 @@ app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
     await supabase.from('verification_codes').delete().eq('email', email)
-    await logActivity(user.id, 'LOGIN', 'Login Success', req)
+    await logActivity(user.id, 'LOGIN', 'Success', req)
 
     res.json({ success: true, user })
   } catch (error) {
