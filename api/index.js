@@ -101,7 +101,7 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
   }
 }
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.3.0 (Proxy Off)' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '5.4.0 (Realtime Ready)' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
 app.post('/api/subdomain', limiter, async (req, res) => {
@@ -164,14 +164,13 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     
     if (!cfData.success) {
       const errMsg = cfData.errors?.[0]?.message || JSON.stringify(cfData.errors) || 'Cloudflare Creation Failed'
-      
       if (errMsg.includes("private IP") || errMsg.includes("1004")) {
           return res.status(400).json({ success: false, error: "Cloudflare menolak IP Lokal. Gunakan IP Public." })
       }
-      
       throw new Error(errMsg)
     }
 
+    // Insert Subdomain to DB
     await supabase.from('subdomains').insert({ 
         user_id: user.id, 
         name: `${subdomain}.domku.my.id`, 
@@ -180,7 +179,8 @@ app.post('/api/subdomain', limiter, async (req, res) => {
         cf_id: cfData.result?.id || 'unknown'
     })
     
-    await logActivity(user.id, 'CREATE_SUBDOMAIN', `Created ${subdomain}.domku.my.id`, req)
+    // Insert Activity Log (Realtime Trigger)
+    await logActivity(user.id, 'CREATE_SUBDOMAIN', `Created ${subdomain}.domku.my.id -> ${target}`, req)
 
     res.json({ success: true, data: cfData.result })
 
@@ -211,7 +211,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const { error: dbError } = await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash, token }, { onConflict: 'email' })
     if (dbError) throw new Error(dbError.message)
 
-    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut untuk mengaktifkan akun:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
+    await sendEmail(email, 'Verifikasi Akun', 'Verifikasi Pendaftaran', 'Klik link berikut:', 'Verifikasi', `${origin}/verify-email?token=${token}`)
     
     res.json({ success: true, message: 'Email verifikasi terkirim.' })
   } catch (error) {
