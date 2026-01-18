@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { Menu, LogIn } from 'lucide-react'
 import Sidebar from './Sidebar'
 import Loader from './Loader'
-import Footer from './Footer' // Import Footer
+import Footer from './Footer'
 
 const Layout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
@@ -48,7 +48,8 @@ const Layout = () => {
     const init = async () => {
       setIsChecking(true)
       refreshSession()
-      await new Promise(r => setTimeout(r, 400))
+      // Delay sedikit agar animasi loading terlihat smooth
+      await new Promise(r => setTimeout(r, 800))
       setIsChecking(false)
     }
     init()
@@ -74,6 +75,7 @@ const Layout = () => {
     }
   }, [user, isChecking, location.pathname, navigate])
 
+  // TAMPILKAN LOADER BARU DI SINI
   if (isChecking) return <Loader />
 
   return (
@@ -122,7 +124,6 @@ const Layout = () => {
         <Outlet context={{ user, refreshSession }} />
       </main>
 
-      {/* FOOTER - INTEGRATED */}
       <Footer />
     </div>
   )
