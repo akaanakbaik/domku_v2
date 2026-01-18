@@ -12,7 +12,6 @@ const Layout = () => {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Dynamic Title
   useEffect(() => {
     const path = location.pathname
     let title = 'Domku - DNS Manager'
@@ -20,10 +19,10 @@ const Layout = () => {
     if (path === '/subdomain') title = 'Dashboard - Domku'
     if (path === '/settings') title = 'Settings - Domku'
     if (path === '/api') title = 'API Docs - Domku'
+    if (path === '/reset-password') title = 'Reset Password - Domku'
     document.title = title
   }, [location])
 
-  // Session Management
   const refreshSession = useCallback(() => {
     try {
       const local = localStorage.getItem('domku_session')
@@ -48,8 +47,7 @@ const Layout = () => {
     const init = async () => {
       setIsChecking(true)
       refreshSession()
-      // Delay sedikit agar animasi loading terlihat smooth
-      await new Promise(r => setTimeout(r, 800))
+      await new Promise(r => setTimeout(r, 400))
       setIsChecking(false)
     }
     init()
@@ -61,26 +59,26 @@ const Layout = () => {
     }
   }, [refreshSession])
 
-  // Route Protection
   useEffect(() => {
     if (isChecking) return
-    const publicRoutes = ['/', '/auth', '/verify-email', '/api']
-    const isPublic = publicRoutes.includes(location.pathname)
+    
+    const publicRoutes = ['/', '/auth', '/verify-email', '/reset-password', '/api']
+    const currentPath = location.pathname
+    
+    const isPublic = publicRoutes.some(route => currentPath === route || currentPath.startsWith('/api'))
 
     if (!user && !isPublic) {
       navigate('/auth', { replace: true })
     }
-    if (user && location.pathname === '/auth') {
+    if (user && (currentPath === '/auth' || currentPath === '/verify-email' || currentPath === '/reset-password')) {
       navigate('/subdomain', { replace: true })
     }
   }, [user, isChecking, location.pathname, navigate])
 
-  // TAMPILKAN LOADER BARU DI SINI
   if (isChecking) return <Loader />
 
   return (
     <div className="min-h-screen bg-[#0b0c10] text-slate-200 font-sans flex flex-col">
-      {/* NAVBAR */}
       <header className="fixed top-0 left-0 right-0 h-16 bg-[#0b0c10]/80 backdrop-blur-md border-b border-blue-900/30 flex items-center justify-between px-4 z-40 transition-all">
         <div className="flex items-center gap-2">
           <Link to="/" className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-cyan-400 bg-clip-text text-transparent tracking-wider hover:opacity-80 transition-opacity">
@@ -117,7 +115,6 @@ const Layout = () => {
         </div>
       </header>
 
-      {/* SIDEBAR & CONTENT */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={user} />
 
       <main className="pt-24 px-4 flex-1 w-full max-w-7xl mx-auto">
