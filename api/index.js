@@ -75,11 +75,13 @@ const isPrivateIP = (ip) => {
 
 const logActivity = async (userId, action, details, req) => {
   try {
+    // Ambil IP Asli User
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown'
+    
     await supabase.from('activity_logs').insert({
       user_id: userId,
-      action,
-      details,
+      action, // Contoh: "CREATE_SUBDOMAIN"
+      details, // Contoh: "Created test.domku.my.id"
       ip_address: ip
     })
   } catch (e) {
@@ -101,7 +103,7 @@ const sendEmail = async (to, subject, title, message, buttonText, buttonLink) =>
   }
 }
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '6.0.0 (Full Sync)' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '6.1.0 (Log Fix)' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
 // 1. CREATE SUBDOMAIN
@@ -171,6 +173,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
       throw new Error(errMsg)
     }
 
+    // SIMPAN KE DB
     await supabase.from('subdomains').insert({ 
         user_id: user.id, 
         name: `${subdomain}.domku.my.id`, 
@@ -179,7 +182,8 @@ app.post('/api/subdomain', limiter, async (req, res) => {
         cf_id: cfData.result?.id || 'unknown'
     })
     
-    await logActivity(user.id, 'CREATE_SUBDOMAIN', `Created ${subdomain}.domku.my.id -> ${target}`, req)
+    // CATAT LOG AKTIVITAS (PENTING)
+    await logActivity(user.id, 'CREATE_SUBDOMAIN', `Created ${subdomain}.domku.my.id`, req)
 
     res.json({ success: true, data: cfData.result })
 
@@ -189,7 +193,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
   }
 })
 
-// 2. DELETE SUBDOMAIN (NEW FEATURE)
+// 2. DELETE SUBDOMAIN
 app.delete('/api/subdomain/:id', limiter, async (req, res) => {
   try {
     const apiKey = req.headers['x-api-key']
@@ -197,18 +201,16 @@ app.delete('/api/subdomain/:id', limiter, async (req, res) => {
     
     if (!apiKey) return res.status(401).json({ success: false, error: "API Key required" })
 
-    // Cek User
     const { data: user, error: userError } = await supabase.from('users').select('id').eq('api_key', apiKey).single()
     if (userError || !user) return res.status(403).json({ success: false, error: "Invalid API Key" })
 
-    // Cek Subdomain di DB (Pastikan milik user ini)
     const { data: subData, error: subDataError } = await supabase.from('subdomains').select('*').eq('id', subId).eq('user_id', user.id).single()
     
     if (subDataError || !subData) {
-        return res.status(404).json({ success: false, error: "Subdomain tidak ditemukan atau bukan milik Anda" })
+        return res.status(404).json({ success: false, error: "Subdomain tidak ditemukan" })
     }
 
-    // Hapus di Cloudflare
+    // HAPUS DI CLOUDFLARE
     if (subData.cf_id && subData.cf_id !== 'unknown') {
         const zoneId = process.env.CLOUDFLARE_ZONE_ID
         const cfHeaders = {
@@ -222,12 +224,13 @@ app.delete('/api/subdomain/:id', limiter, async (req, res) => {
         })
     }
 
-    // Hapus di DB
+    // HAPUS DI DB
     await supabase.from('subdomains').delete().eq('id', subId)
     
+    // CATAT LOG HAPUS (PENTING)
     await logActivity(user.id, 'DELETE_SUBDOMAIN', `Deleted ${subData.name}`, req)
 
-    res.json({ success: true, message: "Subdomain deleted successfully" })
+    res.json({ success: true, message: "Deleted" })
 
   } catch (error) {
     console.error("Delete Error:", error)
@@ -261,7 +264,6 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     
     res.json({ success: true, message: 'Email verifikasi terkirim.' })
   } catch (error) {
-    console.error("Register Error:", error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
@@ -270,7 +272,7 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
   try {
     const { token } = req.body
     const { data: pending } = await supabase.from('pending_registrations').select('*').eq('token', token).single()
-    if (!pending) return res.status(400).json({ success: false, error: "Token invalid or expired" })
+    if (!pending) return res.status(400).json({ success: false, error: "Token invalid" })
 
     const apiKey = crypto.randomBytes(24).toString('hex')
     let userId
@@ -299,7 +301,6 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
 
     res.json({ success: true, message: 'Account Verified.' })
   } catch (error) {
-    console.error("Verify Error:", error)
     res.status(500).json({ success: false, error: error.message })
   }
 })
@@ -317,7 +318,7 @@ app.post('/api/auth/login-check', authLimiter, async (req, res) => {
 
     const code = Math.floor(1000 + Math.random() * 9000).toString()
     await supabase.from('verification_codes').upsert({ email, code }, { onConflict: 'email' })
-    await sendEmail(email, 'Login OTP', 'Login Access Code', 'Your OTP is:', null, code)
+    await sendEmail(email, 'Login OTP', 'Login Access Code', 'OTP Code:', null, code)
 
     res.json({ success: true, message: 'OTP Sent' })
   } catch (error) {
