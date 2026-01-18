@@ -80,9 +80,10 @@ const getHtmlTemplate = (title, bodyContent, buttonText = null, buttonUrl = null
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Segoe UI',sans-serif;background-color:#f4f4f9;margin:0;padding:0}.container{max-width:600px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.05)}.header{background:#0f172a;padding:30px;text-align:center}.header h1{color:#3b82f6;margin:0;font-size:24px;letter-spacing:2px}.content{padding:40px 30px;color:#334155;line-height:1.6}.btn{display:inline-block;background:#2563eb;color:#fff!important;padding:12px 30px;text-decoration:none;border-radius:8px;font-weight:600;margin-top:20px;box-shadow:0 4px 6px rgba(37,99,235,0.2)}.btn:hover{background:#1d4ed8}.footer{background:#f8fafc;padding:20px;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0}.link-break{word-break:break-all;font-size:12px;color:#94a3b8;margin-top:20px}</style></head><body><div class="container"><div class="header"><h1>DOMKU MANAGER</h1></div><div class="content"><h2 style="color:#1e293b;margin-top:0">${title}</h2>${bodyContent}${buttonText?`<div style="text-align:center"><a href="${buttonUrl}" class="btn">${buttonText}</a></div>`:''}${buttonUrl?`<p class="link-break">Link: <br>${buttonUrl}</p>`:''}</div><div class="footer"><p>${footerNote}</p><p>&copy; 2026 Domku System</p></div></div></body></html>`
 }
 
-app.get('/api', (req, res) => res.json({ status: 'Online', version: '2.4.0' }))
+app.get('/api', (req, res) => res.json({ status: 'Online', version: '2.5.0' }))
 app.get('/api/status', (req, res) => res.json({ status: 'online', time: new Date() }))
 
+// 1. REGISTER
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const name = xss(req.body.name || '')
@@ -92,8 +93,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 
     if (!name || !rawEmail || !password) return res.status(400).json({ success: false, error: "Data incomplete" })
     
-    // FIX: Force Lowercase Email
-    const email = rawEmail.toLowerCase()
+    // WAJIB LOWERCASE
+    const email = rawEmail.toLowerCase().trim()
 
     const { data: userList } = await supabase.auth.admin.listUsers()
     if (userList?.users?.find(u => u.email === email)) return res.status(400).json({ success: false, error: "Email sudah terdaftar" })
@@ -103,48 +104,61 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + 10 * 60000)
 
-    await supabase.from('pending_registrations').upsert({ name, email, password_hash: passwordHash }, { onConflict: 'email' })
+    // Hapus data pending lama jika ada (agar tidak duplikat error)
+    await supabase.from('pending_registrations').delete().eq('email', email)
+    
+    // Simpan baru
+    const { error: pendError } = await supabase.from('pending_registrations').insert({ name, email, password_hash: passwordHash })
+    if (pendError) throw new Error("Database Error: " + pendError.message)
+
     await supabase.from('auth_tokens').insert({ email, token, type: 'VERIFY_EMAIL', expires_at: expiresAt })
 
     const verifyUrl = `${origin}/verify-email?token=${token}&email=${email}`
-    const html = getHtmlTemplate('Verifikasi Email', `<p>Halo <b>${name}</b>,</p><p>Klik tombol di bawah untuk mengaktifkan akun.</p>`, 'Verifikasi Sekarang', verifyUrl)
+    const html = getHtmlTemplate('Verifikasi Email', `<p>Halo <b>${name}</b>,</p><p>Klik tombol di bawah untuk mengaktifkan akun Anda.</p>`, 'Verifikasi Sekarang', verifyUrl)
     await transporter.sendMail({ from: `"Domku Security" <${process.env.NODEMAILER_EMAIL}>`, to: email, subject: 'Aktivasi Akun', html })
 
     res.json({ success: true, message: 'Link verifikasi dikirim.' })
   } catch (error) { res.status(500).json({ success: false, error: error.message }) }
 })
 
+// 2. VERIFY EMAIL (FIXED: Case Insensitive)
 app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
   try {
     const { token } = req.body
-    const emailInput = req.body.email ? req.body.email.toLowerCase() : null
+    const emailInput = req.body.email ? req.body.email.toLowerCase().trim() : null
     
     // 1. Cek Token
     const { data: tokenData } = await supabase.from('auth_tokens').select('*').eq('token', token).eq('type', 'VERIFY_EMAIL').single()
     
-    // LOGIC FIX: Jika token tidak ada, cek apakah user sudah aktif (Handling Double Click)
+    // Jika token tidak ditemukan, cek apakah user sudah aktif (Fallback)
     if (!tokenData) {
         if (emailInput) {
-            const { data: existing } = await supabase.from('users').select('id').eq('email', emailInput).single()
-            if (existing) return res.json({ success: true, message: 'Akun sudah aktif sebelumnya.' })
+            const { data: existing } = await supabase.from('users').select('id').ilike('email', emailInput).single()
+            if (existing) return res.json({ success: true, message: 'Akun sudah aktif.' })
         }
         return res.status(400).json({ success: false, error: "Link tidak valid atau sudah digunakan." })
     }
 
     if (new Date(tokenData.expires_at) < new Date()) return res.status(400).json({ success: false, error: "Link kadaluarsa." })
 
-    const email = tokenData.email.toLowerCase()
+    const email = tokenData.email.toLowerCase().trim()
     
-    // 2. Cek Data Pending
-    const { data: pending } = await supabase.from('pending_registrations').select('*').eq('email', email).single()
+    // 2. Cek Data Pending dengan ILIKE (Case Insensitive Match)
+    const { data: pending, error: pendError } = await supabase
+        .from('pending_registrations')
+        .select('*')
+        .ilike('email', email) // FIX UTAMA: ilike
+        .single()
     
     if (!pending) {
-        // Fallback Check: Pending hilang tapi token ada? Cek user real.
-        const { data: existing } = await supabase.from('users').select('id').eq('email', email).single()
+        // Double Check: Apakah user sudah ada di tabel users?
+        const { data: existing } = await supabase.from('users').select('id').ilike('email', email).single()
         if (existing) {
-            await supabase.from('auth_tokens').delete().eq('token', token) // Bersihkan token
+            // Bersihkan token sisa
+            await supabase.from('auth_tokens').delete().eq('token', token)
             return res.json({ success: true, message: 'Akun sudah aktif.' })
         }
+        console.error("Verify Error: Pending Data Not Found for", email)
         return res.status(400).json({ success: false, error: "Data registrasi tidak ditemukan. Silakan daftar ulang." })
     }
 
@@ -160,16 +174,65 @@ app.post('/api/auth/verify-email', authLimiter, async (req, res) => {
     if (createError) throw new Error(createError.message)
 
     await supabase.from('users').upsert({ id: authUser.user.id, email: pending.email, name: pending.name, api_key: apiKey, password_hash: pending.password_hash })
-    await supabase.from('pending_registrations').delete().eq('email', email)
+    
+    // Cleanup
+    await supabase.from('pending_registrations').delete().ilike('email', email)
     await supabase.from('auth_tokens').delete().eq('token', token)
 
     res.json({ success: true, message: 'Akun berhasil diaktifkan.' })
+  } catch (error) { 
+      console.error("Verify Exception:", error)
+      res.status(500).json({ success: false, error: error.message }) 
+  }
+})
+
+// 3. FORGOT PASSWORD
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
+  try {
+    const email = req.body.email ? req.body.email.toLowerCase().trim() : ''
+    const origin = req.body.origin
+
+    const { data: user } = await supabase.from('users').select('id, name').ilike('email', email).single()
+    if (!user) return res.status(404).json({ success: false, error: "Email tidak ditemukan." })
+
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 10 * 60000)
+
+    await supabase.from('auth_tokens').delete().eq('email', email).eq('type', 'RESET_PASSWORD')
+    await supabase.from('auth_tokens').insert({ email, token, type: 'RESET_PASSWORD', expires_at: expiresAt })
+
+    const resetUrl = `${origin}/reset-password?token=${token}&email=${email}`
+    const html = getHtmlTemplate('Reset Password', `<p>Halo <b>${user.name}</b>,</p><p>Klik tombol di bawah untuk mereset kata sandi Anda.</p>`, 'Ubah Password', resetUrl)
+    await transporter.sendMail({ from: `"Domku Security" <${process.env.NODEMAILER_EMAIL}>`, to: email, subject: 'Permintaan Reset Password', html })
+
+    res.json({ success: true, message: 'Link reset telah dikirim.' })
   } catch (error) { res.status(500).json({ success: false, error: error.message }) }
 })
 
+// 4. RESET PASSWORD
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = req.body
+    
+    const { data: tokenData } = await supabase.from('auth_tokens').select('*').eq('token', token).eq('type', 'RESET_PASSWORD').single()
+    if (!tokenData) return res.status(400).json({ success: false, error: "Link invalid." })
+    if (new Date(tokenData.expires_at) < new Date()) return res.status(400).json({ success: false, error: "Link expired." })
+
+    const email = tokenData.email
+    const salt = await bcrypt.genSalt(12)
+    const newHash = await bcrypt.hash(newPassword, salt)
+
+    await supabase.from('users').update({ password_hash: newHash }).eq('email', email)
+    await supabase.from('auth_tokens').delete().eq('token', token)
+
+    res.json({ success: true, message: 'Password berhasil diubah.' })
+  } catch (error) { res.status(500).json({ success: false, error: error.message }) }
+})
+
+// 5. RESEND VERIFY
 app.post('/api/auth/resend-verify', authLimiter, async (req, res) => {
   try {
-    const email = req.body.email ? req.body.email.toLowerCase() : ''
+    const email = req.body.email ? req.body.email.toLowerCase().trim() : ''
     const origin = req.body.origin
 
     if(!email) return res.status(400).json({success:false, error: "Email required"})
@@ -177,7 +240,6 @@ app.post('/api/auth/resend-verify', authLimiter, async (req, res) => {
     const token = crypto.randomBytes(32).toString('hex')
     const expiresAt = new Date(Date.now() + 10 * 60000)
 
-    // Hapus token lama untuk email ini
     await supabase.from('auth_tokens').delete().eq('email', email).eq('type', 'VERIFY_EMAIL')
     await supabase.from('auth_tokens').insert({ email, token, type: 'VERIFY_EMAIL', expires_at: expiresAt })
 
@@ -189,34 +251,36 @@ app.post('/api/auth/resend-verify', authLimiter, async (req, res) => {
   } catch (error) { res.status(500).json({ success: false, error: error.message }) }
 })
 
+// 6. LOGIN CHECK
 app.post('/api/auth/login-check', authLimiter, async (req, res) => {
   try {
-    const email = req.body.email ? req.body.email.toLowerCase() : ''
+    const email = req.body.email ? req.body.email.toLowerCase().trim() : ''
     const password = req.body.password || ''
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
     if (!user) return res.status(400).json({ success: false, error: "User not found" })
 
     const isValid = await bcrypt.compare(password, user.password_hash)
-    if (!isValid) return res.status(400).json({ success: false, error: "Wrong password" })
+    if (!isValid) return res.status(400).json({ success: false, error: "Password salah" })
 
     const code = Math.floor(1000 + Math.random() * 9000).toString()
     await supabase.from('verification_codes').upsert({ email, code }, { onConflict: 'email' })
     
-    const html = getHtmlTemplate('Kode Login', `<p>Gunakan kode ini:</p><h1 style="text-align:center;letter-spacing:5px;">${code}</h1>`, null, null, 'Jangan berikan kepada siapapun.')
+    const html = getHtmlTemplate('Kode Login', `<p>Kode login Anda:</p><h1 style="text-align:center;letter-spacing:5px;">${code}</h1>`, null, null, 'Rahasiakan kode ini.')
     await transporter.sendMail({ from: `"Domku Auth" <${process.env.NODEMAILER_EMAIL}>`, to: email, subject: 'Login OTP', html })
 
     res.json({ success: true, message: 'OTP Sent' })
   } catch (error) { res.status(500).json({ success: false, error: error.message }) }
 })
 
+// 7. VERIFY OTP
 app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
   try {
-    const email = req.body.email ? req.body.email.toLowerCase() : ''
+    const email = req.body.email ? req.body.email.toLowerCase().trim() : ''
     const { code } = req.body
     
     const { data: otp } = await supabase.from('verification_codes').select('*').eq('email', email).eq('code', code).single()
-    if (!otp) return res.status(400).json({ success: false, error: "Invalid OTP" })
+    if (!otp) return res.status(400).json({ success: false, error: "Kode OTP Salah" })
 
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
     await supabase.from('verification_codes').delete().eq('email', email)
@@ -226,50 +290,10 @@ app.post('/api/auth/verify-otp', authLimiter, async (req, res) => {
   } catch (error) { res.status(500).json({ success: false, error: error.message }) }
 })
 
-app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
-  try {
-    const email = req.body.email ? req.body.email.toLowerCase() : ''
-    const origin = req.body.origin
-
-    const { data: user } = await supabase.from('users').select('id, name').eq('email', email).single()
-    if (!user) return res.status(404).json({ success: false, error: "Email tidak ditemukan." })
-
-    const token = crypto.randomBytes(32).toString('hex')
-    const expiresAt = new Date(Date.now() + 10 * 60000)
-
-    await supabase.from('auth_tokens').delete().eq('email', email).eq('type', 'RESET_PASSWORD')
-    await supabase.from('auth_tokens').insert({ email, token, type: 'RESET_PASSWORD', expires_at: expiresAt })
-
-    const resetUrl = `${origin}/reset-password?token=${token}&email=${email}`
-    const html = getHtmlTemplate('Reset Password', `<p>Halo <b>${user.name}</b>,</p><p>Klik tombol di bawah untuk reset password.</p>`, 'Ubah Password', resetUrl)
-    await transporter.sendMail({ from: `"Domku Security" <${process.env.NODEMAILER_EMAIL}>`, to: email, subject: 'Reset Password', html })
-
-    res.json({ success: true, message: 'Link reset dikirim.' })
-  } catch (error) { res.status(500).json({ success: false, error: error.message }) }
-})
-
-app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
-  try {
-    const { token, newPassword } = req.body
-    
-    const { data: tokenData } = await supabase.from('auth_tokens').select('*').eq('token', token).eq('type', 'RESET_PASSWORD').single()
-    if (!tokenData) return res.status(400).json({ success: false, error: "Link invalid." })
-    if (new Date(tokenData.expires_at) < new Date()) return res.status(400).json({ success: false, error: "Link expired." })
-
-    const email = tokenData.email.toLowerCase()
-    const salt = await bcrypt.genSalt(12)
-    const newHash = await bcrypt.hash(newPassword, salt)
-
-    await supabase.from('users').update({ password_hash: newHash }).eq('email', email)
-    await supabase.from('auth_tokens').delete().eq('token', token)
-
-    res.json({ success: true, message: 'Password berhasil diubah.' })
-  } catch (error) { res.status(500).json({ success: false, error: error.message }) }
-})
-
+// 8. UPDATE PROFILE
 app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) => {
   try {
-    const email = req.body.email ? req.body.email.toLowerCase() : ''
+    const email = req.body.email ? req.body.email.toLowerCase().trim() : ''
     const name = xss(req.body.name || '')
     const bio = xss(req.body.bio || '')
     const phone = xss(req.body.phone || '')
@@ -294,9 +318,10 @@ app.post('/api/user/update-profile', upload.single('avatar'), async (req, res) =
   } catch (error) { res.status(500).json({ success: false, error: error.message }) }
 })
 
+// 9. CHANGE PASSWORD
 app.post('/api/user/change-password', async (req, res) => {
   try {
-    const email = req.body.email ? req.body.email.toLowerCase() : ''
+    const email = req.body.email ? req.body.email.toLowerCase().trim() : ''
     const { oldPassword, newPassword } = req.body
     
     const { data: user } = await supabase.from('users').select('*').eq('email', email).single()
@@ -306,10 +331,11 @@ app.post('/api/user/change-password', async (req, res) => {
     await supabase.from('users').update({ password_hash: newHash }).eq('email', email)
     await logActivity(user.id, 'CHANGE_PASSWORD', 'Success', req)
     
-    res.json({ success: true, message: 'Password diubah' })
+    res.json({ success: true, message: 'Changed' })
   } catch (e) { res.status(500).json({success: false, error: e.message}) }
 })
 
+// 10. DELETE ACCOUNT
 app.delete('/api/user/delete-account', async (req, res) => {
   try {
     const apiKey = req.headers['x-api-key']
@@ -338,10 +364,11 @@ app.delete('/api/user/delete-account', async (req, res) => {
     await supabase.auth.admin.deleteUser(user.id)
     await supabase.from('users').delete().eq('id', user.id)
 
-    res.json({success: true, message: "Account deleted"})
+    res.json({success: true, message: "Deleted"})
   } catch (e) { res.status(500).json({success: false, error: e.message}) }
 })
 
+// 11. SUBDOMAIN
 app.post('/api/subdomain', limiter, async (req, res) => {
   try {
     const apiKey = req.headers['x-api-key']
@@ -358,7 +385,7 @@ app.post('/api/subdomain', limiter, async (req, res) => {
     if (recordType === 'CNAME') rawTarget = rawTarget.replace(/^https?:\/\//i, '').replace(/\/+$/, '')
     const target = xss(rawTarget)
 
-    if (!subdomain || !target) return res.status(400).json({ success: false, error: "Data incomplete" })
+    if (!subdomain || !target) return res.status(400).json({ success: false, error: "Incomplete" })
     if (!SUBDOMAIN_REGEX.test(subdomain)) return res.status(400).json({ success: false, error: "Invalid format" })
     if (BANNED_SUBDOMAINS.includes(subdomain)) return res.status(400).json({ success: false, error: "Banned name" })
     if ((recordType === 'A' || recordType === 'AAAA') && isPrivateIP(target)) return res.status(400).json({ success: false, error: "Private IP disallowed" })
