@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Lock, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { Lock, CheckCircle, XCircle } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { addToast } = useToast()
-  
+
   const token = searchParams.get('token')
 
   const [pass, setPass] = useState({ new: '', confirm: '' })
@@ -35,7 +35,7 @@ const ResetPassword = () => {
         body: JSON.stringify({ token, newPassword: pass.new })
       })
       const data = await res.json()
-      
+
       if (data.success) {
         setStatus('success')
         setTimeout(() => navigate('/auth'), 3000)
@@ -58,8 +58,18 @@ const ResetPassword = () => {
           <>
             <h2 className="text-2xl font-bold text-white mb-2 text-center">Reset Password</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1"><div className="relative"><Lock size={16} className="absolute left-3 top-3 text-slate-500"/><input type="password" required value={pass.new} onChange={e => setPass({...pass, new: e.target.value})} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 text-sm text-white focus:border-blue-500 outline-none" placeholder="Password Baru"/></div></div>
-              <div className="space-y-1"><div className="relative"><Lock size={16} className="absolute left-3 top-3 text-slate-500"/><input type="password" required value={pass.confirm} onChange={e => setPass({...pass, confirm: e.target.value})} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 text-sm text-white focus:border-blue-500 outline-none" placeholder="Konfirmasi Password"/></div></div>
+              <div className="space-y-1">
+                <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-3 text-slate-500"/>
+                    <input type="password" required value={pass.new} onChange={e => setPass({...pass, new: e.target.value})} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 text-sm text-white focus:border-blue-500 outline-none" placeholder="Password Baru"/>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-3 text-slate-500"/>
+                    <input type="password" required value={pass.confirm} onChange={e => setPass({...pass, confirm: e.target.value})} className="w-full bg-[#0b0c10] border border-blue-900/30 rounded-xl py-3 pl-10 text-sm text-white focus:border-blue-500 outline-none" placeholder="Konfirmasi Password"/>
+                </div>
+              </div>
               <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm mt-2 transition-all disabled:opacity-50">
                   {loading ? 'Menyimpan...' : 'Ubah Kata Sandi'}
               </button>
