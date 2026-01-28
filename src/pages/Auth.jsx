@@ -62,7 +62,7 @@ const Auth = () => {
   return (
     <div className="flex items-center justify-center min-h-[85vh] px-4 animate-in fade-in zoom-in duration-500 py-10">
       <div className="w-full max-w-[380px] bg-[#111318] border border-white/5 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden group">
-        
+
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-purple-500 to-blue-400"></div>
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-[60px] pointer-events-none"></div>
         <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full blur-[60px] pointer-events-none"></div>
