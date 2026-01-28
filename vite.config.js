@@ -6,9 +6,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     base: '/',
-    define: {
-      'process.env': env
-    },
+    define: { 'process.env': env },
+    esbuild: { logOverride: { 'this-is-undefined-in-esm': 'silent' } },
     server: {
       proxy: {
         '/api': {
@@ -21,7 +20,21 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      emptyOutDir: true
+      emptyOutDir: true,
+      sourcemap: false,
+      chunkSizeWarningLimit: 3000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            // HANYA pisahkan library node_modules.
+            // JANGAN pisahkan komponen internal (seperti Context/Pages) secara manual
+            // agar React Context Reference tetap satu.
+            if (id.includes('node_modules')) {
+              return 'vendor';
+            }
+          }
+        }
+      }
     }
   }
 })
