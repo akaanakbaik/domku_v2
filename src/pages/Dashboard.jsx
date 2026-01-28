@@ -28,7 +28,7 @@ const Dashboard = () => {
 
   const [showDomainSelector, setShowDomainSelector] = useState(false)
   const [showTypeSelector, setShowTypeSelector] = useState(false)
-  
+
   const domainRef = useRef(null)
   const typeRef = useRef(null)
   const historyRef = useRef(null)
@@ -192,7 +192,7 @@ const Dashboard = () => {
 
       <div className="bg-[#111318] rounded-2xl p-1 relative overflow-hidden border border-white/10 shadow-lg">
         <div className="absolute top-0 right-0 w-40 h-40 bg-blue-600/5 rounded-full blur-[60px] -mr-10 -mt-10 pointer-events-none"></div>
-        
+
         <div className="bg-[#0b0c10]/80 backdrop-blur-xl rounded-[14px] p-4 relative z-10">
             <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xs font-bold text-white tracking-tight uppercase pl-1">New Record</h2>
