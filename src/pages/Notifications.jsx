@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext' // Import useAuth
 import { supabase } from '../lib/supabaseClient'
 import { MailOpen, Bell, Clock, ShieldAlert, Globe, User, Info, CheckCircle2, AlertTriangle, Activity, Server, ArrowRight } from 'lucide-react'
 import Loader from '../components/Loader'
 
 const Notifications = () => {
-  const { user } = useOutletContext()
+  const outletContext = useOutletContext()
+  const authContext = useAuth()
+  
+  // FIX: Safe destructuring with fallback
+  const user = outletContext?.user || authContext?.user
+
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
 
