@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { User, Lock, Save, Camera, Mail, ShieldAlert, Loader2, Trash2, BadgeCheck, Star, Smartphone, FileText, CheckCircle2, Shield, AlertOctagon, Eye, EyeOff } from 'lucide-react'
+import { User, Lock, Save, Camera, Mail, ShieldAlert, Loader2, Trash2, BadgeCheck, Star, Smartphone, FileText, CheckCircle2, Shield, AlertOctagon, Eye, EyeOff, Key, Copy, AlertTriangle } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 
@@ -8,6 +8,7 @@ const Settings = () => {
   const outletContext = useOutletContext()
   const authContext = useAuth()
   
+  // FIX: Fallback context
   const user = outletContext?.user || authContext?.user
   const { refreshSession } = authContext
   const { addToast } = useToast()
@@ -22,6 +23,7 @@ const Settings = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showKey, setShowKey] = useState(false)
 
   const [userStatus, setUserStatus] = useState({ label: 'Regular User', color: 'slate' })
 
@@ -128,6 +130,11 @@ const Settings = () => {
     }
   }
 
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text)
+    addToast('success', 'Disalin ke clipboard')
+  }
+
   if (!user) return null
 
   return (
@@ -177,34 +184,69 @@ const Settings = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-          <section className="bg-[#111318] p-6 rounded-3xl border border-white/5 shadow-lg relative overflow-hidden group hover:border-white/10 transition-all">
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/5">
-                  <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500"><User size={20}/></div>
-                  <div>
-                      <h2 className="font-bold text-base text-white">Edit Profil</h2>
-                      <p className="text-[11px] text-slate-500">Perbarui informasi publik Anda</p>
+          <div className="space-y-6">
+              <section className="bg-[#111318] p-6 rounded-3xl border border-white/5 shadow-lg relative overflow-hidden group hover:border-white/10 transition-all">
+                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/5">
+                      <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500"><User size={20}/></div>
+                      <div>
+                          <h2 className="font-bold text-base text-white">Edit Profil</h2>
+                          <p className="text-[11px] text-slate-500">Perbarui informasi publik Anda</p>
+                      </div>
                   </div>
-              </div>
-              <form onSubmit={handleProfileUpdate} className="space-y-5">
-                  <div className="space-y-1.5 group/input">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase ml-1 flex items-center gap-1.5 group-focus-within/input:text-blue-400 transition-colors">Nama Lengkap</label>
-                      <input type="text" value={profile.name} onChange={e => setProfile({...profile, name: e.target.value})} className="w-full bg-[#0b0c10] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none transition-all placeholder-slate-700 shadow-inner" placeholder="John Doe" />
+                  <form onSubmit={handleProfileUpdate} className="space-y-5">
+                      <div className="space-y-1.5 group/input">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase ml-1 flex items-center gap-1.5 group-focus-within/input:text-blue-400 transition-colors">Nama Lengkap</label>
+                          <input type="text" value={profile.name} onChange={e => setProfile({...profile, name: e.target.value})} className="w-full bg-[#0b0c10] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none transition-all placeholder-slate-700 shadow-inner" placeholder="John Doe" />
+                      </div>
+                      <div className="space-y-1.5 group/input">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase ml-1 flex items-center gap-1.5 group-focus-within/input:text-blue-400 transition-colors">No. Telepon</label>
+                          <input type="text" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full bg-[#0b0c10] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none transition-all placeholder-slate-700 shadow-inner" placeholder="+62..." />
+                      </div>
+                      <div className="space-y-1.5 group/input">
+                        <label className="text-[10px] text-slate-500 font-bold uppercase ml-1 flex items-center gap-1.5 group-focus-within/input:text-blue-400 transition-colors">Bio Singkat</label>
+                        <textarea rows="3" value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-[#0b0c10] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none resize-none transition-all placeholder-slate-700 shadow-inner" placeholder="Ceritakan sedikit tentang Anda..." />
+                      </div>
+                      <div className="pt-2 flex justify-end">
+                        <button disabled={loading} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-95 group/btn">
+                            {loading ? <Loader2 size={16} className="animate-spin"/> : <Save size={16} className="group-hover/btn:scale-110 transition-transform"/>} Simpan Perubahan
+                        </button>
+                      </div>
+                  </form>
+              </section>
+
+              <section className="bg-[#111318] p-5 rounded-2xl border border-white/5 shadow-md relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-[0.02] group-hover:opacity-[0.05] transition-opacity duration-500"><Key size={100}/></div>
+                  <div className="flex items-center gap-3 mb-4">
+                      <div className="p-1.5 bg-yellow-500/10 rounded-lg text-yellow-500"><Key size={16}/></div>
+                      <div>
+                          <h2 className="font-bold text-sm text-white">Akses API</h2>
+                          <p className="text-[10px] text-slate-500">Kunci akses programatik</p>
+                      </div>
                   </div>
-                  <div className="space-y-1.5 group/input">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase ml-1 flex items-center gap-1.5 group-focus-within/input:text-blue-400 transition-colors">No. Telepon</label>
-                      <input type="text" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} className="w-full bg-[#0b0c10] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none transition-all placeholder-slate-700 shadow-inner" placeholder="+62..." />
+                  <div className="bg-[#0b0c10] p-3 rounded-xl border border-white/10 relative group/code">
+                      <div className="text-[9px] text-slate-500 uppercase font-bold mb-1.5 flex justify-between items-center">
+                          Master Key <span className="text-[8px] bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/20">RAHASIA</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <code className="text-[10px] text-yellow-100/90 font-mono break-all block selection:bg-yellow-500/30 leading-relaxed truncate">
+                            {showKey ? user.api_key : '•'.repeat(24)}
+                        </code>
+                        <div className="flex gap-1 shrink-0">
+                            <button onClick={() => setShowKey(!showKey)} className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors">
+                                {showKey ? <EyeOff size={12}/> : <Eye size={12}/>}
+                            </button>
+                            <button onClick={() => copyToClipboard(user.api_key)} className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors">
+                                <Copy size={12}/>
+                            </button>
+                        </div>
+                      </div>
                   </div>
-                  <div className="space-y-1.5 group/input">
-                    <label className="text-[10px] text-slate-500 font-bold uppercase ml-1 flex items-center gap-1.5 group-focus-within/input:text-blue-400 transition-colors">Bio Singkat</label>
-                    <textarea rows="3" value={profile.bio} onChange={e => setProfile({...profile, bio: e.target.value})} className="w-full bg-[#0b0c10] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-blue-500/50 outline-none resize-none transition-all placeholder-slate-700 shadow-inner" placeholder="Ceritakan sedikit tentang Anda..." />
+                  <div className="mt-3 flex items-start gap-2 bg-yellow-900/10 p-2.5 rounded-lg border border-yellow-500/10">
+                      <AlertTriangle size={12} className="text-yellow-500 shrink-0 mt-0.5"/>
+                      <p className="text-[9px] text-yellow-200/70 leading-relaxed">Hubungi admin jika Anda perlu memperbarui/mengganti API Key ini.</p>
                   </div>
-                  <div className="pt-2 flex justify-end">
-                    <button disabled={loading} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-95 group/btn">
-                        {loading ? <Loader2 size={16} className="animate-spin"/> : <Save size={16} className="group-hover/btn:scale-110 transition-transform"/>} Simpan Perubahan
-                    </button>
-                  </div>
-              </form>
-          </section>
+              </section>
+          </div>
 
           <div className="space-y-6">
               <section className="bg-[#111318] p-6 rounded-3xl border border-white/5 shadow-lg hover:border-white/10 transition-all">
