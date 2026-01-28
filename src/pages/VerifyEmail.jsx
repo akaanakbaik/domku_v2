@@ -7,25 +7,23 @@ const VerifyEmail = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { addToast } = useToast()
-  
+
   const token = searchParams.get('token')
   const email = searchParams.get('email')
-  
+
   const [status, setStatus] = useState('processing')
   const [msg, setMsg] = useState('')
-  
-  // REF INI PENTING: Mencegah React menjalankan verifikasi 2 kali
+
   const dataFetchedRef = useRef(false)
 
   useEffect(() => {
     const verify = async () => {
-      // Jika sudah pernah fetch, stop (Anti Double-Click Logic)
       if (dataFetchedRef.current) return
       dataFetchedRef.current = true
 
       if (!token || !email) {
         setStatus('error')
-        setMsg('Link verifikasi rusak/tidak lengkap.')
+        setMsg('Link verifikasi rusak atau parameter tidak lengkap.')
         return
       }
 
@@ -33,20 +31,18 @@ const VerifyEmail = () => {
         const res = await fetch('/api/auth/verify-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // Kirim token DAN email agar backend bisa cek status user jika token hilang
           body: JSON.stringify({ token, email })
         })
         const data = await res.json()
-        
+
         if (data.success) {
           setStatus('success')
           addToast('success', data.message || "Selamat Datang! Akun Anda aktif.")
-          // Beri waktu user membaca pesan sukses sebelum redirect
           setTimeout(() => navigate('/auth'), 3000)
         } else {
           setStatus('error')
-          setMsg(data.error)
-          addToast('error', data.error)
+          setMsg(data.error || 'Verifikasi gagal.')
+          addToast('error', data.error || 'Verifikasi gagal.')
         }
       } catch (e) {
         setStatus('error')
@@ -55,7 +51,7 @@ const VerifyEmail = () => {
     }
 
     verify()
-  }, []) // Empty dependency array = run once on mount
+  }, [token, email, navigate, addToast])
 
   const handleResend = async () => {
     if(!email) return addToast('error', "Email tidak ditemukan.")
@@ -109,7 +105,7 @@ const VerifyEmail = () => {
             </div>
             <h2 className="text-xl font-bold text-white">Verifikasi Gagal</h2>
             <p className="text-red-400 text-sm mt-2 font-medium bg-red-900/10 px-3 py-1 rounded-lg border border-red-500/10">{msg}</p>
-            
+
             <div className="mt-8 w-full space-y-3">
                 {email && (
                   <button onClick={handleResend} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-blue-600/20">
