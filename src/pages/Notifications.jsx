@@ -107,7 +107,7 @@ const Notifications = () => {
 
   return (
     <div className="max-w-3xl mx-auto pb-24 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      
+
       <div className="flex items-center justify-between py-8 border-b border-white/5 mb-6">
         <div className="flex items-center gap-4">
             <div className="p-3 bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-2xl border border-blue-500/20 shadow-lg shadow-blue-500/5">
