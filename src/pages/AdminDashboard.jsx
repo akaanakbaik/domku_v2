@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { useOutletContext, useNavigate } from 'react-router-dom'
-import { Shield, Users, Globe, Activity, Search, Trash2, Ban, Lock, Server, Zap, Power, Database, Settings, RefreshCw, XCircle, Bell, Plus, Image as ImageIcon, Send, Key, Terminal, Cpu, HardDrive, Wifi, Save, ChevronDown, Check, FileText, LayoutTemplate, Radio, Monitor, Clock, Calendar, CheckCircle2, AlertTriangle, MousePointer2, StickyNote, Eraser, PenTool } from 'lucide-react'
+import { Shield, Users, Globe, Activity, Search, Trash2, Ban, Lock, Server, Zap, Power, Database, Settings, RefreshCw, XCircle, Bell, Plus, Image as ImageIcon, Send, Key, Terminal, Cpu, HardDrive, Wifi, Save, ChevronDown, Check, FileText, LayoutTemplate, Radio, Monitor, Clock, Calendar, CheckCircle2, AlertTriangle, MousePointer2, StickyNote, Eraser, PenTool, UploadCloud, Folder, File, FolderPlus, Sidebar } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
 
@@ -60,8 +60,11 @@ const CustomSelect = ({ options, value, onChange, icon: Icon, placeholder = "Sel
 }
 
 const AdminDashboard = () => {
-  const { user } = useOutletContext()
-  const { impersonate } = useAuth()
+  const outletContext = useOutletContext()
+  const authContext = useAuth()
+  const user = outletContext?.user || authContext?.user
+  
+  const { impersonate } = authContext
   const navigate = useNavigate()
   const { addToast } = useToast()
 
@@ -69,6 +72,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview')
   const [currentTime, setCurrentTime] = useState(new Date())
   const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   
   const [stats, setStats] = useState({
     users: 0, subdomains: 0, logs: 0, banned: 0, maintenance: false,
@@ -98,6 +102,64 @@ const AdminDashboard = () => {
     { id: 2, text: 'Backup Database', status: 'done' }
   ])
   const [newTask, setNewTask] = useState('')
+
+  const [fileSystem, setFileSystem] = useState([
+    { 
+      id: 'root',
+      name: 'root', 
+      type: 'folder', 
+      isOpen: true,
+      children: [
+        { 
+          id: 'var',
+          name: 'var', 
+          type: 'folder', 
+          isOpen: true,
+          children: [
+            { 
+              id: 'www',
+              name: 'www', 
+              type: 'folder', 
+              isOpen: false,
+              children: [
+                { id: 'index', name: 'index.html', type: 'file', size: '2KB' },
+                { id: 'robots', name: 'robots.txt', type: 'file', size: '1KB' }
+              ] 
+            },
+            { 
+              id: 'logs',
+              name: 'log', 
+              type: 'folder', 
+              isOpen: false,
+              children: [
+                { id: 'syslog', name: 'syslog', type: 'file', size: '14MB' }, 
+                { id: 'authlog', name: 'auth.log', type: 'file', size: '2MB' }
+              ] 
+            }
+          ]
+        },
+        { 
+          id: 'etc',
+          name: 'etc', 
+          type: 'folder', 
+          isOpen: false,
+          children: [
+            { id: 'nginx', name: 'nginx', type: 'folder', isOpen: false, children: [{ id: 'conf', name: 'nginx.conf', type: 'file', size: '4KB' }] },
+            { id: 'hosts', name: 'hosts', type: 'file', size: '1KB' }
+          ]
+        },
+        { 
+          id: 'home',
+          name: 'home', 
+          type: 'folder', 
+          isOpen: true,
+          children: [
+            { id: 'admin', name: 'admin', type: 'folder', isOpen: false, children: [{ id: 'backup', name: 'backup_v1.sql', type: 'file', size: '450MB' }] }
+          ]
+        }
+      ]
+    }
+  ])
 
   const headers = { 'Content-Type': 'application/json', 'X-Admin-Email': user?.email }
 
@@ -186,6 +248,48 @@ const AdminDashboard = () => {
       setTasks(tasks.map(t => t.id === id ? { ...t, status: t.status === 'todo' ? 'done' : 'todo' } : t))
   }
 
+  const toggleFolder = (folderId) => {
+      const toggleNode = (nodes) => {
+          return nodes.map(node => {
+              if (node.id === folderId) {
+                  return { ...node, isOpen: !node.isOpen }
+              }
+              if (node.children) {
+                  return { ...node, children: toggleNode(node.children) }
+              }
+              return node
+          })
+      }
+      setFileSystem(toggleNode(fileSystem))
+  }
+
+  const renderFileSystem = (nodes, level = 0) => {
+      return nodes.map(node => (
+          <div key={node.id} style={{ paddingLeft: `${level * 12}px` }}>
+              <div 
+                className={`flex items-center gap-2 py-1 px-2 cursor-pointer hover:bg-white/5 rounded text-xs transition-colors ${node.type === 'folder' ? 'text-yellow-500' : 'text-blue-400'}`}
+                onClick={() => node.type === 'folder' && toggleFolder(node.id)}
+              >
+                  {node.type === 'folder' ? (
+                      <>
+                        {node.isOpen ? <ChevronDown size={12}/> : <ChevronDown size={12} className="-rotate-90"/>}
+                        <Folder size={14} fill="currentColor" fillOpacity={0.2}/>
+                      </>
+                  ) : (
+                      <File size={14}/>
+                  )}
+                  <span className="text-slate-300">{node.name}</span>
+                  {node.type === 'file' && <span className="ml-auto text-[10px] text-slate-600">{node.size}</span>}
+              </div>
+              {node.type === 'folder' && node.isOpen && node.children && (
+                  <div className="border-l border-white/5 ml-3">
+                      {renderFileSystem(node.children, level + 1)}
+                  </div>
+              )}
+          </div>
+      ))
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#020202]">
@@ -219,6 +323,7 @@ const AdminDashboard = () => {
                 { id: 'overview', icon: Activity, label: 'Overview' },
                 { id: 'popup', icon: LayoutTemplate, label: 'Popup Mgr' },
                 { id: 'users', icon: Users, label: 'Users' },
+                { id: 'files', icon: Folder, label: 'Files' },
                 { id: 'tools', icon: Settings, label: 'Tools' }
               ].map(tab => (
                 <button 
@@ -282,6 +387,68 @@ const AdminDashboard = () => {
                 </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'files' && (
+            <div className="bg-[#0f1014] rounded-2xl border border-white/5 p-0 animate-in fade-in zoom-in duration-500 h-[80vh] flex flex-col overflow-hidden">
+                <div className="bg-[#1a1b23] border-b border-white/5 p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="flex gap-2">
+                            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                        </div>
+                        <div className="h-4 w-px bg-white/10 mx-2"></div>
+                        <div className="flex items-center gap-2 bg-black/40 px-3 py-1 rounded text-[10px] text-slate-400 font-mono border border-white/5 w-64">
+                            <span className="text-green-500">admin@domku</span>
+                            <span>:</span>
+                            <span className="text-blue-400">~/var/www</span>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors"><UploadCloud size={14}/></button>
+                        <button className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors"><FolderPlus size={14}/></button>
+                        <button className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors"><Settings size={14}/></button>
+                    </div>
+                </div>
+                
+                <div className="flex-1 flex overflow-hidden">
+                    <div className={`w-64 bg-[#111216] border-r border-white/5 flex flex-col transition-all duration-300 ${isSidebarCollapsed ? '-ml-64' : ''}`}>
+                        <div className="p-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Explorer</div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
+                            {renderFileSystem(fileSystem)}
+                        </div>
+                    </div>
+                    
+                    <div className="flex-1 bg-[#0a0a0a] relative flex flex-col">
+                        <div className="flex items-center gap-2 p-2 border-b border-white/5 text-[10px] text-slate-400">
+                            <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="p-1 hover:bg-white/10 rounded"><Sidebar size={14}/></button>
+                            <span className="text-slate-600">|</span>
+                            <span>Name</span>
+                            <span className="ml-auto mr-20">Size</span>
+                            <span className="mr-4">Type</span>
+                        </div>
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 grid grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-4 content-start">
+                            {['backup.sql', 'error.log', 'access.log', '.env', 'images/', 'public/', 'src/', 'package.json', 'README.md', 'yarn.lock'].map((f, i) => (
+                                <div key={i} className="group flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-white/5 cursor-pointer border border-transparent hover:border-white/10 transition-all hover:scale-105">
+                                    <div className="w-12 h-12 flex items-center justify-center text-4xl shadow-lg relative">
+                                        {f.endsWith('/') ? 
+                                            <Folder className="text-yellow-500 fill-yellow-500/20 w-full h-full"/> : 
+                                            f.endsWith('.sql') ? <Database className="text-blue-400 w-full h-full"/> :
+                                            <FileText className="text-slate-400 w-full h-full"/>
+                                        }
+                                    </div>
+                                    <span className="text-[10px] text-slate-300 font-medium truncate w-full text-center group-hover:text-white">{f}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="h-6 bg-[#1a1b23] border-t border-white/5 flex items-center px-3 justify-between text-[9px] text-slate-500">
+                            <span>12 items selected</span>
+                            <span>450 MB Total</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         )}
 
         {activeTab === 'popup' && (
