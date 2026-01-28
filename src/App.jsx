@@ -32,7 +32,7 @@ const PrivateRoute = () => {
 }
 
 const MainLayout = () => {
-  const { user, loading } = useAuth()
+  const { user, loading, refreshSession } = useAuth() // Get refreshSession too
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
@@ -73,7 +73,8 @@ const MainLayout = () => {
       <div className="flex-1 md:pl-[280px] transition-all duration-300 flex flex-col min-h-screen">
         <main className="flex-1 w-full max-w-[1920px] mx-auto p-0">
             <Suspense fallback={<Loader />}>
-                <Outlet />
+                {/* PASSING CONTEXT HERE IS CRITICAL */}
+                <Outlet context={{ user, refreshSession }} />
             </Suspense>
         </main>
         <Footer />
@@ -83,7 +84,6 @@ const MainLayout = () => {
 }
 
 // --- App Routes Logic ---
-// Dipisahkan agar useSecurity() bisa dijalankan di dalam AuthProvider
 const AppRoutes = () => {
   useSecurity() 
 
@@ -114,7 +114,6 @@ const AppRoutes = () => {
 }
 
 // --- Root Component ---
-// HANYA Provider disini. Tidak ada logic lain.
 const App = () => {
   return (
     <ToastProvider>
