@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Pertahankan settingan asli Anda */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #0b0c10;
+  color: #e2e8f0;
+  overflow-x: hidden;
+}
+
+/* --- UTILITIES --- */
+@layer components {
+  /* Updated Glassmorphism: Lebih rapi & responsif dengan Tailwind */
+  .glass {
+    @apply bg-[#111318]/70 backdrop-blur-md border border-blue-500/10;
+  }
+  
+  /* Hide Scrollbar Standard */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* --- SCROLLBAR GLOBAL (Gaya Asli Anda - Biru) --- */
+::-webkit-scrollbar {
+  width: 8px; /* Tetap 8px sesuai request */
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0c10; 
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1f2937; 
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6; /* Tetap Biru saat hover */
+}
+
+/* --- SCROLLBAR KHUSUS ADMIN (Merah - Baru) --- */
+/* Ini hanya akan aktif di halaman Admin agar nuansanya beda */
+.admin-scroll ::-webkit-scrollbar-thumb {
+  background: #7f1d1d; 
+}
+.admin-scroll ::-webkit-scrollbar-thumb:hover {
+  background: #ef4444; 
+}
+
+/* --- ANIMATIONS (Gabungan Lama & Baru) --- */
+
+/* 1. Pulse Glow (Punya Anda - Dipertahankan) */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.1); }
+  50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.3); }
+}
+.animate-glow {
+  animation: pulse-glow 3s infinite;
+}
+
+/* 2. Marquee (Teks Berjalan untuk Notif) */
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-100%); }
+}
+.animate-marquee {
+  display: inline-block;
+  animation: marquee 20s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* 3. Fade In & Zoom In (Smooth Transition - PENTING untuk UX Notif) */
+@keyframes fadeInZoom {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-in.zoom-in {
+  animation: fadeInZoom 0.3s ease-out forwards;
+}
+
+/* 4. Spin Reverse (Untuk Loader Admin) */
+@keyframes spin-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+.animate-spin-reverse {
+  animation: spin-reverse 1s linear infinite;
+}

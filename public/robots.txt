@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Disallow: /subdomain
+Disallow: /settings
+Disallow: /reset-password
+Disallow: /verify-email
+
+Sitemap: https://domku.my.id/sitemap.xml

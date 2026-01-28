@@ -1,0 +1,110 @@
+/* Wrapper pusat loading */
+.loader-wrapper {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #0b0c10;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* Lingkaran biru */
+.loader {
+  width: clamp(32px, 8vw, 50px);
+  height: clamp(32px, 8vw, 50px);
+  border-radius: 50%;
+  animation: loader-rotate 1.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+  transform-origin: center;
+  backface-visibility: hidden;
+  perspective: 1000px;
+  will-change: transform, box-shadow, background;
+  filter: blur(0.2px) drop-shadow(0 0 6px rgba(0, 191, 255, 0.5));
+}
+
+/* Animasi lingkaran */
+@keyframes loader-rotate {
+  0% {
+    transform: rotate(0deg);
+    box-shadow:
+      0 1px 1px 0 #f0f8ff inset,
+      0 3px 5px 0 #87ceeb inset,
+      0 4px 4px 0 #00bfff inset;
+  }
+  25% {
+    transform: rotate(90deg);
+    box-shadow:
+      0 1px 1px 0 #eaf6ff inset,
+      0 3px 5px 0 #7fd6ff inset,
+      0 4px 4px 0 #1ebfff inset;
+  }
+  50% {
+    transform: rotate(180deg);
+    background: #dff4ff;
+    box-shadow:
+      0 1px 1px 0 #b0e0e6 inset,
+      0 3px 5px 0 #1e90ff inset,
+      0 4px 4px 0 #0000cd inset;
+  }
+  75% {
+    transform: rotate(270deg);
+    box-shadow:
+      0 1px 1px 0 #eaf6ff inset,
+      0 3px 5px 0 #7fd6ff inset,
+      0 4px 4px 0 #1ebfff inset;
+  }
+  100% {
+    transform: rotate(360deg);
+    box-shadow:
+      0 1px 1px 0 #f0f8ff inset,
+      0 3px 5px 0 #87ceeb inset,
+      0 4px 4px 0 #00bfff inset;
+  }
+}
+
+/* Tulisan 'Loading' */
+.letter-wrapper {
+  display: flex;
+  gap: 2px;
+}
+
+.loader-letter {
+  color: #ffffff;
+  opacity: 0.4;
+  transform: translateY(0);
+  animation: loader-letter-anim 2s ease-in-out infinite;
+  font-size: clamp(1rem, 5vw, 1.6rem);
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.loader-letter:nth-child(1) { animation-delay: 0s; }
+.loader-letter:nth-child(2) { animation-delay: 0.1s; }
+.loader-letter:nth-child(3) { animation-delay: 0.2s; }
+.loader-letter:nth-child(4) { animation-delay: 0.3s; }
+.loader-letter:nth-child(5) { animation-delay: 0.4s; }
+.loader-letter:nth-child(6) { animation-delay: 0.5s; }
+.loader-letter:nth-child(7) { animation-delay: 0.6s; }
+.loader-letter:nth-child(8) { animation-delay: 0.7s; }
+.loader-letter:nth-child(9) { animation-delay: 0.8s; }
+.loader-letter:nth-child(10) { animation-delay: 0.9s; }
+
+/* Animasi huruf */
+@keyframes loader-letter-anim {
+  0%, 100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+  40% {
+    opacity: 0.7;
+    transform: translateY(0);
+  }
+}
