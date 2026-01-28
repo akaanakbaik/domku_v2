@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useOutletContext } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabaseClient'
-import { Globe, Trash2, Copy, Plus, Search, Download, QrCode, MapPin, Activity, Clock, RefreshCw, Check, Server, Info, AlertCircle, BarChart3, ChevronDown, ChevronUp, Router, Database, Link, ArrowRight, X } from 'lucide-react'
+import { Globe, Trash2, Copy, Plus, Search, Download, QrCode, MapPin, Activity, RefreshCw, Check, Info, AlertCircle, ChevronDown, Link, ArrowRight, X } from 'lucide-react'
 import { DashboardSkeleton } from '../components/Skeleton'
 import Loader from '../components/Loader'
 import { useToast } from '../context/ToastContext'
 
 const Dashboard = () => {
-  const { user } = useOutletContext()
+  const outletContext = useOutletContext()
+  const authContext = useAuth()
+  
+  const user = outletContext?.user || authContext?.user
+
   const { addToast } = useToast()
 
   const [loading, setLoading] = useState(true)
