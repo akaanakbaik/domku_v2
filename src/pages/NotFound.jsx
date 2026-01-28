@@ -7,18 +7,18 @@ const NotFound = () => {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4 relative overflow-hidden">
-      
+
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none -z-10"></div>
       <div className="absolute bottom-0 right-0 w-[300px] h-[300px] bg-purple-600/10 rounded-full blur-[80px] pointer-events-none -z-10"></div>
 
       <div className="w-full max-w-lg relative z-10 text-center">
-        
+
         <div className="mb-8 relative inline-block group">
           <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full group-hover:bg-blue-500/30 transition-all duration-500"></div>
           <div className="relative bg-[#16181d] border border-white/5 p-6 rounded-3xl shadow-2xl ring-1 ring-white/5 group-hover:-translate-y-1 transition-transform duration-500">
             <FileQuestion size={48} className="text-blue-500" />
           </div>
-          
+
           <div className="absolute -right-2 -top-2 bg-[#111318] border border-red-500/30 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-lg">
             <Activity size={10} className="animate-pulse" /> 404 ERROR
           </div>
