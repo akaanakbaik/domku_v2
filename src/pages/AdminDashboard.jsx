@@ -8,17 +8,12 @@ import {
   Calendar, UploadCloud, Check, MessageSquare, Clock, Map, Hash, TerminalSquare, 
   StickyNote, LifeBuoy, ToggleLeft, ToggleRight, MoreHorizontal, UserCheck, ShieldAlert, 
   Monitor, Folder, File, Command, Box, Play, RotateCcw, PenTool, LayoutTemplate, 
-  Mail, UserPlus, CreditCard, ChevronRight, Archive, Inbox, Tag, Move, LayoutDashboard
+  Mail, UserPlus, CreditCard, ChevronRight, Archive, Inbox, Tag, Move, LayoutDashboard,
+  ArrowRight, ArrowUp, ArrowDown, Siren, MousePointer2
 } from 'lucide-react'
 import { useToast } from '../context/ToastContext'
+import { useAuth } from '../context/AuthContext'
 
-/**
- * =================================================================================================
- * UTILITY FUNCTIONS & HOOKS
- * =================================================================================================
- */
-
-// Hook untuk mendeteksi klik di luar elemen
 const useClickOutside = (ref, handler) => {
   useEffect(() => {
     const listener = (event) => {
@@ -34,10 +29,7 @@ const useClickOutside = (ref, handler) => {
   }, [ref, handler])
 }
 
-// Format angka ke format mata uang/angka cantik
 const formatNumber = (num) => new Intl.NumberFormat('en-US').format(num)
-
-// Format bytes ke ukuran file
 const formatBytes = (bytes, decimals = 2) => {
   if (!+bytes) return '0 Bytes'
   const k = 1024
@@ -47,13 +39,6 @@ const formatBytes = (bytes, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
-/**
- * =================================================================================================
- * INTERNAL UI COMPONENTS (DESIGN SYSTEM)
- * =================================================================================================
- */
-
-// 1. Custom Modal Component
 const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', type = 'default' }) => {
   useEffect(() => {
     if (isOpen) document.body.style.overflow = 'hidden'
@@ -76,7 +61,7 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', type = '
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className={`w-full ${sizeClasses[size]} bg-[#0a0b0e] border ${borderClass} rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200`}>
+      <div className={`w-full ${sizeClasses[size]} bg-[#0b0c10] border ${borderClass} rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200`}>
         <div className={`px-5 py-4 border-b ${headerClass} flex justify-between items-center`}>
           <h3 className={`text-xs font-bold tracking-widest uppercase flex items-center gap-2 ${type === 'danger' ? 'text-red-500' : 'text-white'}`}>
             {type === 'danger' && <AlertTriangle size={14}/>}
@@ -99,7 +84,6 @@ const Modal = ({ isOpen, onClose, title, children, footer, size = 'md', type = '
   )
 }
 
-// 2. Custom Select Dropdown
 const CustomSelect = ({ options, value, onChange, icon: Icon, placeholder = "Select..." }) => {
   const [isOpen, setIsOpen] = useState(false)
   const ref = useRef(null)
@@ -112,7 +96,7 @@ const CustomSelect = ({ options, value, onChange, icon: Icon, placeholder = "Sel
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between bg-[#111] border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white hover:border-white/20 transition-all outline-none group active:scale-[0.99]"
+        className="w-full flex items-center justify-between bg-[#15161a] border border-white/10 rounded-xl px-3 py-2 text-[10px] text-white hover:border-white/20 transition-all outline-none group active:scale-[0.99]"
       >
         <div className="flex items-center gap-2 truncate">
           {Icon && <Icon size={12} className="text-slate-500 group-hover:text-blue-400 transition-colors shrink-0" />}
@@ -124,7 +108,7 @@ const CustomSelect = ({ options, value, onChange, icon: Icon, placeholder = "Sel
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-[#161618] border border-white/10 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/50">
+        <div className="absolute z-50 w-full mt-1 bg-[#1a1b20] border border-white/10 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ring-1 ring-black/50">
           <div className="max-h-48 overflow-y-auto custom-scrollbar p-1">
             {options.map((opt) => (
               <button
@@ -148,7 +132,6 @@ const CustomSelect = ({ options, value, onChange, icon: Icon, placeholder = "Sel
   )
 }
 
-// 3. Status Badge
 const StatusBadge = ({ status, type = 'default' }) => {
   const styles = {
     active: 'bg-green-500/10 text-green-400 border-green-500/20',
@@ -166,9 +149,20 @@ const StatusBadge = ({ status, type = 'default' }) => {
   )
 }
 
-// 4. Traffic Bar Chart Component (CSS-only visualization)
-const TrafficChart = ({ data }) => {
-  const max = Math.max(...data)
+const TrafficChart = ({ data, color }) => {
+  const max = Math.max(...data, 1)
+  const isGreen = color === 'green'
+  const isPurple = color === 'purple'
+  const isBlue = color === 'blue'
+  const isRed = color === 'red'
+  
+  const getBg = () => {
+    if(isGreen) return 'bg-green-500'
+    if(isPurple) return 'bg-purple-500'
+    if(isBlue) return 'bg-blue-500'
+    return 'bg-red-500'
+  }
+
   return (
     <div className="flex items-end gap-[2px] h-full w-full px-1 pb-1">
       {data.map((value, i) => {
@@ -177,10 +171,10 @@ const TrafficChart = ({ data }) => {
         return (
           <div key={i} className="flex-1 flex flex-col justify-end group relative h-full">
             <div 
-              className={`w-full rounded-t-[1px] transition-all duration-500 ease-in-out relative ${isHigh ? 'bg-red-500/50' : 'bg-blue-500/30 group-hover:bg-blue-400/50'}`} 
+              className={`w-full rounded-t-[1px] transition-all duration-500 ease-in-out relative ${isHigh ? 'bg-white/80' : `${getBg()}/40 group-hover:${getBg()}/80`}`} 
               style={{ height: `${height}%` }}
             >
-              <div className={`absolute top-0 w-full h-[1px] ${isHigh ? 'bg-red-400' : 'bg-blue-400'} opacity-50`}></div>
+              {isHigh && <div className="absolute top-0 w-full h-[1px] bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>}
             </div>
           </div>
         )
@@ -189,75 +183,75 @@ const TrafficChart = ({ data }) => {
   )
 }
 
-/**
- * =================================================================================================
- * MAIN PAGE COMPONENT: ADMIN DASHBOARD
- * =================================================================================================
- */
-
 const AdminDashboard = () => {
-  const { user } = useOutletContext()
+  const outletContext = useOutletContext()
+  const authContext = useAuth()
+  
+  // SAFE CONTEXT RETRIEVAL - FIXING THE UNDEFINED ERROR
+  // We try outletContext first, if null, fallback to authContext
+  const user = outletContext?.user || authContext?.user || null
+  
   const navigate = useNavigate()
   const { addToast } = useToast()
 
-  // --- GLOBAL STATES ---
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
   const [showMobileMenu, setShowMobileMenu] = useState(false)
-  const [themeColor, setThemeColor] = useState('red') // red, blue, green, purple
+  const [themeColor, setThemeColor] = useState('blue') 
   const [currentTime, setCurrentTime] = useState(new Date())
 
-  // --- DATA STATES ---
   const [stats, setStats] = useState({
     users: 0, subdomains: 0, logs: 0, banned: 0, maintenance: false,
     server_load: 0, memory_usage: 0, disk_usage: 0, db_status: 'Connected',
-    health_score: 98, version: '2.5.0-RC'
+    health_score: 98, version: '2.8.0-Stable'
   })
   
   const [usersList, setUsersList] = useState([])
   const [filteredUsers, setFilteredUsers] = useState([])
   const [trafficData, setTrafficData] = useState(Array.from({length: 40}, () => Math.floor(Math.random() * 50) + 10))
-  
-  // --- FEATURE STATES ---
+  const [cpuCores, setCpuCores] = useState(Array.from({length: 16}, () => Math.floor(Math.random() * 40)))
+
   const [fileSystem, setFileSystem] = useState([
     { id: 'root', name: 'root', type: 'folder', isOpen: true, level: 0, children: [
+        { id: 'etc', name: 'etc', type: 'folder', isOpen: false, level: 1, children: [
+            { id: 'nginx', name: 'nginx.conf', type: 'file', size: '12KB' },
+            { id: 'hosts', name: 'hosts', type: 'file', size: '1KB' }
+        ]},
         { id: 'var', name: 'var', type: 'folder', isOpen: false, level: 1, children: [
             { id: 'logs', name: 'logs', type: 'folder', isOpen: false, level: 2, children: [
                 { id: 'syslog', name: 'syslog', type: 'file', size: '24MB' },
-                { id: 'auth', name: 'auth.log', type: 'file', size: '2MB' }
+                { id: 'error', name: 'error.log', type: 'file', size: '2MB' }
             ]}
         ]},
         { id: 'home', name: 'home', type: 'folder', isOpen: true, level: 1, children: [
             { id: 'admin', name: 'admin', type: 'folder', isOpen: true, level: 2, children: [
-                { id: 'config', name: 'config.json', type: 'file', size: '4KB' },
-                { id: 'backup', name: 'backup_v2.sql', type: 'file', size: '128MB' }
+                { id: 'backup', name: 'backup_v3.sql', type: 'file', size: '142MB' },
+                { id: 'keys', name: 'secrets.env', type: 'file', size: '2KB' }
             ]}
         ]}
     ]}
   ])
   
-  const [popupForm, setPopupForm] = useState({ active: false, title: '', message: '', type: 'text', image: '', position: 'center' })
+  const [popupForm, setPopupForm] = useState({ active: false, title: '', message: '', type: 'text', image: '' })
   const [tasks, setTasks] = useState([
-    { id: 1, title: 'Review System Logs', status: 'todo', priority: 'high' },
-    { id: 2, title: 'Update SQL Schema', status: 'in-progress', priority: 'medium' },
-    { id: 3, title: 'Clear Redis Cache', status: 'done', priority: 'low' }
+    { id: 1, title: 'Audit Security Logs', status: 'todo', priority: 'high' },
+    { id: 2, title: 'Update React Dependencies', status: 'in-progress', priority: 'medium' },
+    { id: 3, title: 'Flush Redis Cache', status: 'done', priority: 'low' }
   ])
   const [newTaskText, setNewTaskText] = useState('')
   
   const [tickets, setTickets] = useState([
-    { id: 101, user: 'alex_dev', subject: 'Domain Propagation Issue', status: 'open', time: '10m ago' },
-    { id: 102, user: 'sarah_m', subject: 'Billing Inquiry', status: 'closed', time: '2h ago' }
+    { id: 101, user: 'dev_alex', subject: 'API Rate Limit Issue', status: 'open', time: '12m ago' },
+    { id: 102, user: 'sarah_biz', subject: 'Subdomain Verification', status: 'pending', time: '3h ago' },
+    { id: 103, user: 'mike_net', subject: 'Login Failure Report', status: 'closed', time: '1d ago' }
   ])
 
   const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', content: null, action: null, type: 'default' })
-  const [terminalOutput, setTerminalOutput] = useState([{ type: 'info', text: 'Titan Kernel v2.5.0 initialized...' }])
+  const [terminalOutput, setTerminalOutput] = useState([{ type: 'info', text: 'Titan Kernel v2.8.0 initialized...' }])
   const [terminalInput, setTerminalInput] = useState('')
+  const [sqlQuery, setSqlQuery] = useState('')
   
-  const headers = { 'Content-Type': 'application/json', 'X-Admin-Email': user?.email }
-
-  // --- ACCESS CONTROL ---
   const checkAdminAccess = useCallback(() => {
-    // Simple mock check
     if (!user || user.email !== 'khaliqarrasyidabdul@gmail.com') {
       navigate('/', { replace: true })
       return false
@@ -265,46 +259,42 @@ const AdminDashboard = () => {
     return true
   }, [user, navigate])
 
-  // --- DATA FETCHING & SIMULATION ---
   const fetchData = useCallback(async () => {
     if (!checkAdminAccess()) return
     try {
-      // Mock Data Load (In real app, fetch from API)
-      const mockUsers = Array.from({ length: 50 }, (_, i) => ({
+      const mockUsers = Array.from({ length: 42 }, (_, i) => ({
         id: i + 1,
-        name: `User ${i + 1}`,
-        email: `user${i+1}@titan.com`,
-        risk_score: Math.random() > 0.8 ? 'HIGH' : 'LOW',
-        subdomains: [{ count: Math.floor(Math.random() * 5) }],
-        created_at: new Date().toISOString()
+        name: `User ${i + 100}`,
+        email: `user${i+100}@titan.com`,
+        risk_score: Math.random() > 0.9 ? 'HIGH' : Math.random() > 0.7 ? 'MEDIUM' : 'LOW',
+        subdomains: [{ count: Math.floor(Math.random() * 8) }],
+        created_at: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString()
       }))
       setUsersList(mockUsers)
       setFilteredUsers(mockUsers)
       setStats(prev => ({ ...prev, users: 1250, subdomains: 4502 }))
       setLoading(false)
     } catch (error) {
-      addToast('error', 'Gagal memuat data admin')
+      addToast('error', 'Failed to sync admin data')
       setLoading(false)
     }
   }, [checkAdminAccess, addToast])
 
   useEffect(() => {
     fetchData()
-    // Real-time Simulation
     const interval = setInterval(() => {
         setCurrentTime(new Date())
         setTrafficData(prev => [...prev.slice(1), Math.floor(Math.random() * 80) + 10])
+        setCpuCores(prev => prev.map(() => Math.floor(Math.random() * 90) + 10))
         setStats(prev => ({
             ...prev,
             server_load: Math.floor(Math.random() * 30) + 20,
             memory_usage: Math.floor(Math.random() * 15) + 40
         }))
-    }, 1500)
+    }, 1200)
     return () => clearInterval(interval)
   }, [fetchData])
 
-  // --- HANDLERS ---
-  
   const handleTerminalCommand = (e) => {
     e.preventDefault()
     if(!terminalInput.trim()) return
@@ -312,9 +302,10 @@ const AdminDashboard = () => {
     
     let response = { type: 'info', text: '' }
     if(cmd === 'clear') { setTerminalOutput([]); setTerminalInput(''); return }
-    else if(cmd === 'status') response = { type: 'success', text: 'All systems operational. Load: ' + stats.server_load + '%' }
-    else if(cmd === 'users') response = { type: 'info', text: `Total Active Users: ${usersList.length}` }
-    else if(cmd === 'help') response = { type: 'warning', text: 'Commands: status, users, clear, reboot, logs' }
+    else if(cmd === 'status') response = { type: 'success', text: 'System OK. CPU Load: ' + stats.server_load + '%' }
+    else if(cmd === 'users') response = { type: 'info', text: `Active: ${usersList.length} | Banned: ${stats.banned}` }
+    else if(cmd === 'help') response = { type: 'warning', text: 'Commands: status, users, clear, reboot, flush' }
+    else if(cmd === 'flush') response = { type: 'success', text: 'DNS Cache Flushed Successfully' }
     else response = { type: 'error', text: `Command not found: ${cmd}` }
 
     setTerminalOutput(prev => [...prev, { type: 'cmd', text: `root@titan:~# ${cmd}` }, response])
@@ -336,24 +327,19 @@ const AdminDashboard = () => {
     if(!newTaskText) return
     setTasks([...tasks, { id: Date.now(), title: newTaskText, status: 'todo', priority: 'medium' }])
     setNewTaskText('')
-    addToast('success', 'Task added')
+    addToast('success', 'Task added to board')
   }
 
   const moveTask = (id, newStatus) => {
     setTasks(tasks.map(t => t.id === id ? { ...t, status: newStatus } : t))
   }
 
-  const deletePopup = () => {
-    setPopupForm({ ...popupForm, active: false })
-    addToast('info', 'Popup deactivated')
+  const runSql = () => {
+    if(!sqlQuery) return
+    addToast('success', 'Query Executed (0.04s)')
+    setTerminalOutput(prev => [...prev, { type: 'info', text: `SQL> ${sqlQuery}` }, { type: 'success', text: 'Query returned 0 rows (Mock Mode)' }])
+    setSqlQuery('')
   }
-
-  const savePopup = () => {
-    setPopupForm({ ...popupForm, active: true })
-    addToast('success', 'Global popup published')
-  }
-
-  // --- RENDERERS ---
 
   const renderFileSystem = (nodes) => {
     return nodes.map(node => (
@@ -385,18 +371,6 @@ const AdminDashboard = () => {
     ))
   }
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#020202]">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-red-900/30 border-t-red-600 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center"><Shield size={24} className="text-red-600"/></div>
-        </div>
-        <h1 className="text-xs font-bold text-red-600 tracking-[0.5em] mt-6 animate-pulse">TITAN SYSTEM</h1>
-      </div>
-    )
-  }
-
   const getThemeColors = () => {
     if(themeColor === 'blue') return 'text-blue-500 border-blue-500/20 bg-blue-500/10'
     if(themeColor === 'green') return 'text-green-500 border-green-500/20 bg-green-500/10'
@@ -404,10 +378,21 @@ const AdminDashboard = () => {
     return 'text-red-500 border-red-500/20 bg-red-500/10'
   }
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0b0c10]">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-red-900/30 border-t-red-600 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center"><Shield size={24} className="text-red-600"/></div>
+        </div>
+        <h1 className="text-xs font-bold text-red-600 tracking-[0.5em] mt-6 animate-pulse">TITAN KERNEL</h1>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-[#050505] pb-24 font-sans text-slate-300 selection:bg-red-900/30 selection:text-white">
+    <div className="min-h-screen bg-[#0b0c10] pb-24 font-sans text-slate-300 selection:bg-blue-500/30 selection:text-white">
       
-      {/* Global Modal Container */}
       <Modal 
         isOpen={modalConfig.isOpen}
         onClose={() => setModalConfig({ ...modalConfig, isOpen: false })}
@@ -423,15 +408,13 @@ const AdminDashboard = () => {
         {modalConfig.content}
       </Modal>
 
-      {/* --- HEADER --- */}
-      <div className="sticky top-0 z-40 bg-[#050505]/90 backdrop-blur-xl border-b border-white/5 shadow-2xl">
-        <div className="max-w-[1920px] mx-auto px-4 py-2.5">
+      <div className="sticky top-0 z-40 bg-[#0b0c10]/90 backdrop-blur-xl border-b border-white/5 shadow-2xl">
+        <div className="max-w-[1920px] mx-auto px-4 py-3">
           <div className="flex flex-col md:flex-row justify-between items-center gap-3">
             
-            {/* Logo & Mobile Toggle */}
             <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${getThemeColors()} shadow-[0_0_15px_rgba(220,38,38,0.2)]`}>
+                <div className={`p-2 rounded-lg ${getThemeColors()} shadow-[0_0_15px_rgba(var(--theme-rgb),0.2)]`}>
                   <Shield size={18}/>
                 </div>
                 <div>
@@ -445,13 +428,12 @@ const AdminDashboard = () => {
               <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="md:hidden p-2 text-slate-400 bg-white/5 rounded-lg border border-white/10"><List size={16}/></button>
             </div>
 
-            {/* Navigation Tabs */}
             <div className={`${showMobileMenu ? 'flex' : 'hidden'} md:flex gap-1 overflow-x-auto w-full md:w-auto no-scrollbar pb-2 md:pb-0 items-center justify-start md:justify-end border-t md:border-t-0 border-white/5 pt-2 md:pt-0 mt-2 md:mt-0`}>
               {[
                 { id: 'overview', icon: Activity, label: 'Overview' },
                 { id: 'users', icon: Users, label: 'Users' },
                 { id: 'system', icon: Server, label: 'System' },
-                { id: 'popup', icon: LayoutTemplate, label: 'Visual Popup' },
+                { id: 'popup', icon: LayoutTemplate, label: 'Popup' },
                 { id: 'tasks', icon: CheckCircle2, label: 'Tasks' },
                 { id: 'tools', icon: Settings, label: 'Tools' }
               ].map(tab => (
@@ -482,10 +464,8 @@ const AdminDashboard = () => {
 
       <div className="max-w-[1920px] mx-auto px-4 mt-6 space-y-6">
 
-        {/* ======================= TAB: OVERVIEW ======================= */}
         {activeTab === 'overview' && (
           <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Stat Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                {[
                  { label: 'Total Users', value: stats.users, icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/5', border: 'border-blue-500/20' },
@@ -502,31 +482,29 @@ const AdminDashboard = () => {
                             <stat.icon size={14} className={stat.color}/>
                             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{stat.label}</p>
                         </div>
-                        <h3 className="text-2xl font-black text-white">{stat.value}</h3>
+                        <h3 className="text-2xl font-black text-white">{formatNumber(stat.value).replace(/,/g, '.')}</h3>
                     </div>
                  </div>
                ))}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Traffic Matrix */}
                 <div className="lg:col-span-2 bg-[#0f1014] rounded-xl border border-white/5 p-1 flex flex-col h-72 shadow-lg relative overflow-hidden group">
                     <div className="absolute top-3 left-4 z-10">
-                        <h3 className="text-[10px] font-bold text-white uppercase flex items-center gap-2"><BarChart3 size={12} className="text-blue-500"/> Live Traffic Matrix</h3>
+                        <h3 className="text-[10px] font-bold text-white uppercase flex items-center gap-2"><BarChart3 size={12} className={themeColor === 'blue' ? 'text-blue-500' : 'text-red-500'}/> Live Traffic Matrix</h3>
                         <p className="text-[9px] text-slate-500 font-mono">Real-time packet analysis</p>
                     </div>
-                    <div className="flex-1 pt-10 bg-gradient-to-b from-blue-900/5 to-transparent relative">
+                    <div className={`flex-1 pt-10 bg-gradient-to-b ${themeColor === 'blue' ? 'from-blue-900/10' : 'from-red-900/10'} to-transparent relative`}>
                         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-10"></div>
-                        <TrafficChart data={trafficData} />
+                        <TrafficChart data={trafficData} color={themeColor} />
                     </div>
-                    <div className="h-6 bg-[#0a0b0e] border-t border-white/5 flex items-center justify-between px-3 text-[9px] text-slate-600 font-mono uppercase">
+                    <div className="h-6 bg-[#0e0f13] border-t border-white/5 flex items-center justify-between px-3 text-[9px] text-slate-600 font-mono uppercase">
                         <span>-60s</span>
                         <span>HTTP/WS Stream</span>
                         <span>Now</span>
                     </div>
                 </div>
 
-                {/* Quick Actions & Support */}
                 <div className="grid grid-rows-2 gap-4">
                     <div className="bg-[#0f1014] rounded-xl border border-white/5 p-4 flex flex-col">
                         <div className="flex justify-between items-center mb-3">
@@ -535,26 +513,26 @@ const AdminDashboard = () => {
                         </div>
                         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
                             {tickets.map(t => (
-                                <div key={t.id} className="p-2 bg-white/[0.02] hover:bg-white/5 rounded-lg border border-white/5 transition-colors cursor-pointer">
+                                <div key={t.id} className="p-2 bg-white/[0.02] hover:bg-white/5 rounded-lg border border-white/5 transition-colors cursor-pointer group">
                                     <div className="flex justify-between items-start mb-1">
                                         <span className="text-[10px] font-bold text-blue-400">@{t.user}</span>
                                         <span className="text-[8px] text-slate-600">{t.time}</span>
                                     </div>
-                                    <p className="text-[9px] text-slate-300 line-clamp-1">{t.subject}</p>
+                                    <p className="text-[9px] text-slate-300 line-clamp-1 group-hover:text-white">{t.subject}</p>
                                 </div>
                             ))}
                         </div>
                     </div>
                     
                     <div className="bg-[#0f1014] rounded-xl border border-white/5 p-4 flex flex-col justify-center gap-2">
-                        <button className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all group text-left">
+                        <button onClick={() => addToast('success', 'System optimization started')} className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all group text-left">
                             <div className="p-2 bg-green-500/10 rounded-lg text-green-500"><Zap size={16}/></div>
                             <div>
                                 <h4 className="text-[10px] font-bold text-white">System Optimization</h4>
                                 <p className="text-[8px] text-slate-500">Run cleanup & index</p>
                             </div>
                         </button>
-                        <button className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all group text-left">
+                        <button onClick={() => addToast('success', 'Snapshot created')} className="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/5 transition-all group text-left">
                             <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500"><UploadCloud size={16}/></div>
                             <div>
                                 <h4 className="text-[10px] font-bold text-white">Manual Backup</h4>
@@ -567,11 +545,9 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* ======================= TAB: USERS ======================= */}
         {activeTab === 'users' && (
             <div className="bg-[#0f1014] rounded-xl border border-white/5 flex flex-col h-[75vh] animate-in fade-in slide-in-from-bottom-4 duration-500 shadow-2xl overflow-hidden">
-                {/* User Toolbar */}
-                <div className="p-3 border-b border-white/5 bg-[#0a0b0e] flex flex-col lg:flex-row justify-between items-center gap-3">
+                <div className="p-3 border-b border-white/5 bg-[#0e0f13] flex flex-col lg:flex-row justify-between items-center gap-3">
                     <div className="flex items-center gap-3 w-full lg:w-auto">
                         <div className="p-1.5 bg-blue-500/10 rounded-lg text-blue-500 border border-blue-500/20"><Users size={14}/></div>
                         <div>
@@ -590,7 +566,6 @@ const AdminDashboard = () => {
                     </div>
                 </div>
 
-                {/* User Table */}
                 <div className="flex-1 overflow-auto custom-scrollbar">
                     <table className="w-full text-left text-[10px]">
                         <thead className="bg-[#111318] text-slate-500 font-bold uppercase sticky top-0 z-10 border-b border-white/5">
@@ -617,7 +592,7 @@ const AdminDashboard = () => {
                                         </div>
                                     </td>
                                     <td className="p-3">
-                                        <StatusBadge status={u.risk_score} type={u.risk_score === 'HIGH' ? 'danger' : 'active'} />
+                                        <StatusBadge status={u.risk_score} type={u.risk_score === 'HIGH' ? 'danger' : u.risk_score === 'MEDIUM' ? 'warning' : 'active'} />
                                     </td>
                                     <td className="p-3 font-mono text-slate-400">{u.subdomains[0]?.count || 0} Records</td>
                                     <td className="p-3 text-slate-500">{new Date(u.created_at).toLocaleDateString()}</td>
@@ -636,10 +611,8 @@ const AdminDashboard = () => {
             </div>
         )}
 
-        {/* ======================= TAB: VISUAL POPUP ======================= */}
         {activeTab === 'popup' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Editor */}
                 <div className="bg-[#0f1014] rounded-xl border border-white/5 p-5 shadow-lg">
                     <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-4">
                         <h3 className="text-xs font-bold text-white uppercase flex items-center gap-2"><LayoutTemplate size={14} className="text-purple-500"/> Visual Popup Builder</h3>
@@ -684,17 +657,16 @@ const AdminDashboard = () => {
                         )}
 
                         <div className="pt-4 flex gap-3">
-                            <button onClick={deletePopup} className="flex-1 py-2.5 bg-white/5 text-slate-400 rounded-xl text-[10px] font-bold hover:bg-red-500/10 hover:text-red-500 transition-colors flex items-center justify-center gap-1.5 border border-white/5">
-                                <Trash2 size={12}/> DELETE
+                            <button onClick={() => setPopupForm({...popupForm, active: false})} className="flex-1 py-2.5 bg-white/5 text-slate-400 rounded-xl text-[10px] font-bold hover:bg-red-500/10 hover:text-red-500 transition-colors flex items-center justify-center gap-1.5 border border-white/5">
+                                <Trash2 size={12}/> DEACTIVATE
                             </button>
-                            <button onClick={savePopup} className="flex-1 py-2.5 bg-white text-black rounded-xl text-[10px] font-bold hover:bg-slate-200 transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-white/10 active:scale-95">
+                            <button onClick={() => { setPopupForm({...popupForm, active: true}); addToast('success', 'Popup Published') }} className="flex-1 py-2.5 bg-white text-black rounded-xl text-[10px] font-bold hover:bg-slate-200 transition-colors flex items-center justify-center gap-1.5 shadow-lg shadow-white/10 active:scale-95">
                                 <Save size={12}/> PUBLISH LIVE
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Preview */}
                 <div className="bg-[#0f1014] rounded-xl border border-white/5 p-6 flex flex-col items-center justify-center relative bg-[url('https://grainy-gradients.vercel.app/noise.svg')] min-h-[400px] shadow-lg">
                     <div className="absolute top-4 left-4 bg-black/60 px-2 py-0.5 rounded border border-white/10 text-[8px] font-bold text-slate-300 uppercase tracking-wider backdrop-blur-md">Mobile Preview</div>
                     
@@ -703,7 +675,6 @@ const AdminDashboard = () => {
                             <div className="w-10 h-1 bg-white/10 rounded-full"></div>
                         </div>
                         <div className="relative h-[350px] bg-slate-900 overflow-hidden flex items-center justify-center p-4">
-                            {/* The Popup Mockup */}
                             <div className="w-full bg-[#25262b] rounded-xl shadow-2xl border border-white/10 overflow-hidden animate-in zoom-in-95 duration-300">
                                 {(popupForm.type === 'image' || popupForm.type === 'mixed') && popupForm.image && (
                                     <div className="w-full h-32 bg-slate-800 relative overflow-hidden">
@@ -726,10 +697,8 @@ const AdminDashboard = () => {
             </div>
         )}
 
-        {/* ======================= TAB: TASKS (KANBAN) ======================= */}
         {activeTab === 'tasks' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Task Stats */}
                 <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
                      <div className="p-3 bg-white/5 border border-white/5 rounded-xl flex items-center gap-3">
                          <div className="p-2 bg-green-500/10 rounded-lg text-green-500"><CheckCircle2 size={16}/></div>
@@ -741,7 +710,6 @@ const AdminDashboard = () => {
                      </div>
                 </div>
 
-                {/* Kanban Columns */}
                 {['todo', 'in-progress', 'done'].map(status => (
                     <div key={status} className="bg-[#0f1014] rounded-xl border border-white/5 p-4 flex flex-col h-[500px]">
                         <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/5">
@@ -767,7 +735,7 @@ const AdminDashboard = () => {
                             ))}
                             {status === 'todo' && (
                                 <div className="mt-2 flex gap-2">
-                                    <input value={newTaskText} onChange={e => setNewTaskText(e.target.value)} className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none focus:border-blue-500" placeholder="New task..."/>
+                                    <input value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTask()} className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none focus:border-blue-500" placeholder="New task..."/>
                                     <button onClick={addTask} className="p-1.5 bg-blue-600 rounded-lg text-white hover:bg-blue-500"><Plus size={14}/></button>
                                 </div>
                             )}
@@ -777,10 +745,8 @@ const AdminDashboard = () => {
             </div>
         )}
 
-        {/* ======================= TAB: TOOLS / SYSTEM ======================= */}
         {activeTab === 'system' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* File Explorer */}
                 <div className="bg-[#0f1014] rounded-xl border border-white/5 p-4 flex flex-col h-[400px]">
                     <h3 className="text-xs font-bold text-white uppercase mb-3 flex items-center gap-2 border-b border-white/5 pb-2"><Folder size={14} className="text-yellow-500"/> File System</h3>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
@@ -788,41 +754,48 @@ const AdminDashboard = () => {
                     </div>
                 </div>
 
-                {/* Terminal */}
-                <div className="lg:col-span-2 bg-[#0f1014] rounded-xl border border-white/5 flex flex-col h-[400px] overflow-hidden shadow-lg">
-                    <div className="bg-[#1a1b21] p-2 flex items-center justify-between border-b border-white/5">
-                       <div className="flex items-center gap-2">
-                          <TerminalSquare size={12} className="text-slate-400" />
-                          <span className="text-[10px] font-mono text-slate-300">root@titan-server:~ (ssh)</span>
-                       </div>
-                       <div className="flex gap-1.5">
-                          <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50"></div>
-                          <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
-                          <div className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/50"></div>
-                       </div>
+                <div className="lg:col-span-2 flex flex-col gap-4">
+                     <div className="bg-[#0f1014] rounded-xl border border-white/5 flex flex-col h-[250px] overflow-hidden shadow-lg">
+                        <div className="bg-[#1a1b21] p-2 flex items-center justify-between border-b border-white/5">
+                           <div className="flex items-center gap-2">
+                              <TerminalSquare size={12} className="text-slate-400" />
+                              <span className="text-[10px] font-mono text-slate-300">root@titan-server:~ (ssh)</span>
+                           </div>
+                           <div className="flex gap-1.5">
+                              <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50"></div>
+                              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/50"></div>
+                              <div className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/50"></div>
+                           </div>
+                        </div>
+                        <div className="flex-1 bg-[#050505] p-3 font-mono text-[10px] overflow-y-auto custom-scrollbar" onClick={() => document.getElementById('term-input')?.focus()}>
+                            {terminalOutput.map((line, i) => (
+                                <div key={i} className={`mb-1 ${line.type === 'error' ? 'text-red-400' : line.type === 'success' ? 'text-green-400' : line.type === 'warning' ? 'text-yellow-400' : line.type === 'info' ? 'text-blue-400' : 'text-slate-300'}`}>
+                                    {line.type === 'cmd' ? <span className="text-slate-500 mr-2">$</span> : null}
+                                    {line.text}
+                                </div>
+                            ))}
+                        </div>
+                        <form onSubmit={handleTerminalCommand} className="p-2 bg-[#0a0b0e] border-t border-white/5 flex items-center gap-2">
+                            <span className="text-green-500 font-bold text-xs">➜</span>
+                            <input id="term-input" value={terminalInput} onChange={e => setTerminalInput(e.target.value)} className="flex-1 bg-transparent text-[10px] text-white outline-none font-mono" autoComplete="off" spellCheck="false"/>
+                        </form>
                     </div>
-                    <div className="flex-1 bg-[#050505] p-3 font-mono text-[10px] overflow-y-auto custom-scrollbar" onClick={() => document.getElementById('term-input').focus()}>
-                        {terminalOutput.map((line, i) => (
-                            <div key={i} className={`mb-1 ${line.type === 'error' ? 'text-red-400' : line.type === 'success' ? 'text-green-400' : line.type === 'warning' ? 'text-yellow-400' : line.type === 'info' ? 'text-blue-400' : 'text-slate-300'}`}>
-                                {line.type === 'cmd' ? <span className="text-slate-500 mr-2">$</span> : null}
-                                {line.text}
-                            </div>
-                        ))}
+
+                    <div className="bg-[#0f1014] rounded-xl border border-white/5 p-3 flex flex-col h-[134px]">
+                        <h3 className="text-xs font-bold text-white uppercase mb-2 flex items-center gap-2"><Database size={14} className="text-blue-500"/> SQL Query Runner</h3>
+                        <div className="flex gap-2 h-full">
+                            <textarea value={sqlQuery} onChange={e => setSqlQuery(e.target.value)} className="flex-1 bg-[#050505] border border-white/10 rounded-lg p-2 text-[10px] text-white font-mono outline-none resize-none focus:border-blue-500" placeholder="SELECT * FROM users WHERE id = 1;"/>
+                            <button onClick={runSql} className="w-16 bg-blue-600 hover:bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold text-[10px]"><Play size={16}/></button>
+                        </div>
                     </div>
-                    <form onSubmit={handleTerminalCommand} className="p-2 bg-[#0a0b0e] border-t border-white/5 flex items-center gap-2">
-                        <span className="text-green-500 font-bold text-xs">➜</span>
-                        <input id="term-input" value={terminalInput} onChange={e => setTerminalInput(e.target.value)} className="flex-1 bg-transparent text-[10px] text-white outline-none font-mono" autoComplete="off" autoFocus spellCheck="false"/>
-                    </form>
                 </div>
             </div>
         )}
 
-        {/* ======================= TAB: TOOLS ======================= */}
         {activeTab === 'tools' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {/* Tool Cards */}
                 {[
-                    { title: 'Maintenance Mode', desc: 'Toggle global maintenance screen', icon: Power, color: 'text-red-500', action: () => setModalConfig({ isOpen: true, title: 'Toggle Maintenance', type: 'danger', content: <p className="text-xs text-slate-400">Are you sure you want to toggle maintenance mode? This will affect all users.</p>, action: () => { setStats(p => ({...p, maintenance: !p.maintenance})); addToast('success', 'Maintenance updated') } }) },
+                    { title: 'Maintenance Mode', desc: 'Toggle global maintenance screen', icon: Siren, color: 'text-red-500', action: () => setModalConfig({ isOpen: true, title: 'Toggle Maintenance', type: 'danger', content: <p className="text-xs text-slate-400">Are you sure you want to toggle maintenance mode? This will affect all users.</p>, action: () => { setStats(p => ({...p, maintenance: !p.maintenance})); addToast('success', 'Maintenance updated') } }) },
                     { title: 'API Key Vault', desc: 'Manage global API keys', icon: Key, color: 'text-yellow-500', action: () => {} },
                     { title: 'Cache Explorer', desc: 'View Redis/Memcached stats', icon: Database, color: 'text-blue-500', action: () => {} },
                     { title: 'Cron Scheduler', desc: 'Manage automated tasks', icon: Clock, color: 'text-green-500', action: () => {} }
@@ -836,23 +809,18 @@ const AdminDashboard = () => {
                     </div>
                 ))}
                 
-                {/* Server Health Heatmap */}
                 <div className="lg:col-span-2 bg-[#0f1014] p-5 rounded-xl border border-white/5">
                     <h3 className="text-xs font-bold text-white uppercase mb-4 flex items-center gap-2"><Cpu size={14}/> CPU Core Heatmap</h3>
                     <div className="grid grid-cols-8 gap-2">
-                        {Array.from({length: 16}).map((_, i) => {
-                            const load = Math.floor(Math.random() * 100)
-                            return (
-                                <div key={i} className="aspect-square rounded flex items-center justify-center text-[8px] font-bold text-white transition-all duration-500" 
-                                    style={{ backgroundColor: load > 80 ? '#ef4444' : load > 50 ? '#eab308' : '#22c55e', opacity: load/100 + 0.2 }}>
-                                    {load}%
-                                </div>
-                            )
-                        })}
+                        {cpuCores.map((load, i) => (
+                            <div key={i} className="aspect-square rounded flex items-center justify-center text-[8px] font-bold text-white transition-all duration-500 border border-black/20" 
+                                style={{ backgroundColor: load > 80 ? '#ef4444' : load > 50 ? '#eab308' : '#22c55e', opacity: load/100 + 0.3 }}>
+                                {load}%
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                {/* Audit Log Timeline */}
                 <div className="lg:col-span-2 bg-[#0f1014] p-5 rounded-xl border border-white/5 h-[200px] overflow-hidden flex flex-col">
                     <h3 className="text-xs font-bold text-white uppercase mb-4 flex items-center gap-2"><FileText size={14}/> Audit Log</h3>
                     <div className="flex-1 overflow-y-auto custom-scrollbar relative pl-4 border-l border-white/5 space-y-4">
