@@ -31,7 +31,7 @@ const Footer = () => {
             <Heart size={12} className="text-red-500 fill-red-500 animate-pulse" />
             <span>by</span>
             <a
-                href="https://akadev.me"
+                href="https://akaa.dev"
                 target="_blank"
                 rel="noreferrer"
                 className="text-blue-400 hover:text-blue-300 transition-colors font-bold"
